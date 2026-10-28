@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { getRestaurantTemplate } from "@/lib/website/restaurant-templates";
 
 type ImageType = "hero" | "slider" | "scroll" | "gallery";
 
@@ -41,6 +42,19 @@ export default function WebsiteImageManagerPage() {
   const params = useParams<{ id: string }>();
   const businessId = String(params?.id || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const template = getRestaurantTemplate(query.get("template"));
+    if (template) {
+      setTemplateId(template.id);
+      sessionStorage.setItem(`restaurant-template-${businessId}`, template.id);
+      const type = query.get("type");
+      setActiveType(type === "slider" || type === "scroll" || type === "gallery" ? type : "hero");
+    }
+  }, [businessId]);
+  const template = getRestaurantTemplate(templateId);
 
   const [activeType, setActiveType] = useState<ImageType>("hero");
   const [images, setImages] = useState<WebsiteImage[]>([]);
@@ -193,10 +207,11 @@ export default function WebsiteImageManagerPage() {
             </p>
           </div>
           <Link href={`/admin/businesses/${businessId}/website`} className="inline-flex h-11 items-center justify-center rounded-xl bg-[#172033] px-5 text-sm font-black text-white no-underline">
-            웹사이트 디자인 열기
+            {template ? "이미지 등록 완료 → 템플릿 만들기" : "웹사이트 디자인 열기"}
           </Link>
         </div>
 
+        {template && <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-5"><h2 className="font-black">{template.name} 이미지 준비</h2>{template.images.map(item => <p key={item.type} className="mt-2 text-sm">{item.label} 탭: 권장 {item.size} / 최소 {item.minimum}장</p>)}<p className="mt-3 text-sm">해당 탭에 사진을 등록한 뒤 위의 ‘템플릿 만들기’로 돌아가세요. 기존에 등록한 사진도 사용할 수 있습니다.</p></div>}
         <div className="mt-8 grid grid-cols-2 gap-2 rounded-2xl border border-[#E6D9C9] bg-white p-2 shadow-sm sm:grid-cols-4">
           {TABS.map((tab) => (
             <button key={tab.type} type="button" onClick={() => setActiveType(tab.type)}

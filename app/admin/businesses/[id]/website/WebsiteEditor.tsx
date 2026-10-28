@@ -13,6 +13,9 @@ import {
 import { createPortal } from "react-dom";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
 import InstallAppButton from "@/app/components/InstallAppButton";
+import RestaurantTemplatePicker from "./RestaurantTemplatePicker";
+import type { RestaurantTemplateId } from "@/lib/website/restaurant-templates";
+import { isTemplateDocument, bindTemplateDocument } from "@/lib/website/template-document";
 import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 
 // KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
@@ -1028,6 +1031,19 @@ function resolveCellForDevice(
         : cell.nested_height_px,
   };
 
+  // Mobile photos fit wholly inside their frame rather than crop like cover.
+  // Other multi-image modes keep their own layout behavior.
+  if (device === "mobile" && resolved.type === "image" &&
+      (!resolved.display_mode || resolved.display_mode === "image")) {
+    resolved.image_fit = "contain";
+    resolved.image_size_percent = 100;
+    resolved.image_position_x = 0;
+    resolved.image_position_y = 0;
+  }
+  if (device === "mobile" && resolved.display_mode === "auto-slider") {
+    resolved.slider_auto_height = true;
+  }
+
   resolved.child_cells = Array.isArray(cell.child_cells)
     ? cell.child_cells
         .map((child) => resolveCellForDevice(child, device))
@@ -1214,6 +1230,64 @@ function normalizeGrid(value: unknown, fallback: GridData): GridData {
     cells.push(normalizedCell);
 
     used += span;
+  }
+
+  // Restaurant headers have three content cells; remove only a trailing empty
+  // column from this specific legacy shape, retaining any real fourth content.
+  const restaurantHeader = cells.length >= 3 &&
+    cells[0].type === "logo" && cells[1].type === "title" &&
+    cells[2].type === "phone" &&
+    cells.slice(3).every((cell) => cell.type === "empty" &&
+      !cell.display_mode && !String(cell.text || "").trim() &&
+      !cell.image_url && !cell.child_cells?.length);
+  if (restaurantHeader) {
+    const widths = [20, 55, 25];
+    cells.splice(3);
+    cells.forEach((cell, index) => {
+      cell.span = index === 1 ? 2 : 1;
+      cell.width_percent = widths[index];
+    });
+    used = 4;
+  }
+
+  // Repair the legacy restaurant Contact row: contact text and map, no
+  // additional content. Preserve custom rows containing a real third cell.
+  if (cells.length >= 2 && cells[0].type === "text" &&
+      cells[1].type === "map" &&
+      cells.slice(2).every((cell) => cell.type === "empty" &&
+        !cell.display_mode && !String(cell.text || "").trim() &&
+        !cell.image_url && !cell.child_cells?.length)) {
+    cells.splice(2);
+    cells.forEach((cell) => {
+      cell.span = 2;
+      cell.width_percent = 50;
+    });
+    used = 4;
+  }
+
+  // Repair legacy single Business Hours sections without removing other content.
+  const hoursCells = cells.filter((cell) => cell.display_mode === "business-hours");
+  if (hoursCells.length === 1 && cells.every((cell) =>
+    cell === hoursCells[0] || (cell.type === "empty" && !cell.display_mode &&
+      !String(cell.text || "").trim() && !cell.image_url && !cell.child_cells?.length))) {
+    cells.splice(0, cells.length, { ...hoursCells[0], span: 4,
+      width_percent: 100, mobile_width_percent: 100 });
+    used = 4;
+  }
+
+  // Repair a standalone slider padded with unused columns by older templates.
+  const sliderCells = cells.filter((cell) => cell.display_mode === "auto-slider");
+  const hasOtherContent = cells.some((cell) =>
+    cell.display_mode !== "auto-slider" &&
+    (cell.type !== "empty" || Boolean(cell.display_mode) ||
+      Boolean(String(cell.text || "").trim()) || Boolean(cell.image_url) ||
+      Boolean(cell.child_cells?.length)),
+  );
+  if (sliderCells.length === 1 && !hasOtherContent) {
+    cells.splice(0, cells.length, {
+      ...sliderCells[0], span: 4, width_percent: 100, mobile_width_percent: 100,
+    });
+    used = 4;
   }
 
   while (used < 4) {
@@ -2078,9 +2152,14 @@ function getHeaderMenuHref(
 
 
 function getGridMenuHref(
-  item: NonNullable<GridCell["menu_items"]>[number],
+  item: Omit<NonNullable<GridCell["menu_items"]>[number], "link_type"> & {
+    link_type?: "section" | "page" | "external";
+  },
   businessId?: string | number,
 ) {
+  if (item.link_type === "external") {
+    return normalizeExternalUrl(String(item.link_value || item.url || ""));
+  }
   const legacyTarget = getLegacyMenuTarget(item.url || "");
   const linkType =
     item.link_type === "page" || item.link_type === "section"
@@ -7198,6 +7277,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(true);
   const [fullLayoutEditorOpen, setFullLayoutEditorOpen] = useState(false);
   const [fullLayoutTarget, setFullLayoutTarget] = useState<string>("home");
   // 링크 페이지 카드의 "미리보기"를 눌렀을 때 서버 저장 여부와 관계없이
@@ -7437,6 +7517,36 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     () => normalizeSettings(business?.website_settings, business?.name || ""),
     [business],
   );
+
+  // Apply these layout corrections to existing template-2 drafts as well.
+  useEffect(() => {
+    if (websiteSettings.restaurant_template_id !== "restaurant-2") return;
+    setSections((current) => {
+      let changed = false;
+      const next = current.map((section) => {
+        const layouts = section.content?.layouts?.length ? section.content.layouts : section.content?.grid ? [section.content.grid] : [];
+        const isHero = section.section_type === "hero";
+        const isPhotos = section.title === "Photo Scroll" || layouts.some((layout) => layout.cells.some((cell) => cell.display_mode === "image-scroll"));
+        const isContact = section.title === "Contact" || section.section_type === "contact";
+        const corrected = layouts.map((layout) => {
+          let result = layout;
+          if ((isHero || isPhotos) && (layout.margin_bottom_px !== 20 || layout.mobile_margin_bottom_px !== 20)) {
+            result = { ...result, margin_bottom_px: 20, mobile_margin_bottom_px: 20 };
+          }
+          if (isContact) {
+            const cells = result.cells.map((cell) => cell.type === "text" && (cell.text_align !== "center" || cell.vertical_align !== "center")
+              ? { ...cell, text_align: "center" as const, vertical_align: "center" as const } : cell);
+            if (cells.some((cell, index) => cell !== result.cells[index])) result = { ...result, cells };
+          }
+          return result;
+        });
+        if (!corrected.some((layout, index) => layout !== layouts[index])) return section;
+        changed = true;
+        return { ...section, content: { ...section.content, grid: corrected[0], layouts: corrected } };
+      });
+      return changed ? next : current;
+    });
+  }, [websiteSettings.restaurant_template_id]);
 
   const outerBackgroundColor = String(
     websiteSettings.outer_background_color || "#e5e7eb",
@@ -9593,6 +9703,156 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     };
   }
 
+  async function applyRestaurantTemplate(templateId: RestaurantTemplateId, images: Record<string, string[]>) {
+    if (!business) return;
+    if (sections.length && !window.confirm("선택한 템플릿으로 새로 시작합니다. 기존 디자인 레이어와 링크 페이지는 모두 제거됩니다. 식당 메뉴 상품 데이터와 등록 이미지는 유지됩니다. 서버 저장 전까지 공개 사이트에는 반영되지 않습니다. 적용할까요?")) return;
+    const phone = getBusinessContactValue(business, ["phone", "phone_number", "telephone"]);
+    const email = getBusinessContactValue(business, ["email", "business_email", "contact_email"]);
+    const address = getBusinessAddress(business);
+    // Read only when explicitly applying a template. Never rewrite existing
+    // restaurant designs merely because a shared template was changed.
+    let savedTemplate: { document: unknown; version: number } | null = null;
+    try {
+      const templateResponse = await fetch(`/api/admin/businesses/${businessId}/website-templates/${templateId}`, {
+        cache: "no-store", credentials: "include", signal: AbortSignal.timeout(8000),
+      });
+      if (templateResponse.status === 401 || templateResponse.status === 403) {
+        throw new Error("TEMPLATE_ACCESS_DENIED");
+      }
+      if (templateResponse.ok) {
+        const payload = await templateResponse.json();
+        if (isTemplateDocument(payload.document) && Number.isSafeInteger(payload.version) && payload.version > 0) savedTemplate = payload;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === "TEMPLATE_ACCESS_DENIED") {
+        setMessage("템플릿 접근 권한이 없습니다. 디자인은 변경하지 않았습니다.");
+        return;
+      }
+      // Missing migration, timeout and network errors keep the bundled fallback.
+    }
+    if (savedTemplate && isTemplateDocument(savedTemplate.document)) {
+      try {
+        const orderUrl = `/business/${business.id}/menu`;
+        const contactValues = [address, phone, email].filter(Boolean);
+        const bound = bindTemplateDocument(savedTemplate.document, {
+          business_name: business.name || "", logo: String(websiteSettings.logo_url || business.logo_url || ""),
+          address, phone, email, phone_url: phone ? `tel:${phone}` : "", order_url: orderUrl,
+          hero: images.hero || [], hero_first: images.hero?.[0] || "",
+          slider: images.slider || [], slider_first: images.slider?.[0] || "", scroll: images.scroll || [],
+          hours: parseBusinessTableHours(business.hours),
+          contact_text: [...contactValues, "Privacy Policy"].join("\n"),
+          contact_html: contactValues.map(value => `<p>${escapeCellText(value)}</p>`).join("") + '<p><a href="#privacy">Privacy Policy</a></p>',
+        });
+        const freshen = (value: unknown): unknown => {
+          if (Array.isArray(value)) return value.map(freshen);
+          if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) =>
+            [key, key === "id" ? createId("template") : freshen(item)],
+          ));
+          return value;
+        };
+        const baseId = -Date.now() * 1000;
+        const newSections = bound.sections.map((section, index) => ({
+          ...section, id: baseId - index - 1, business_id: business.id, sort_order: index,
+          content: freshen(section.content), settings: section.settings || {},
+        })) as BusinessSection[];
+        const newSettings = freshen(bound.settings) as Partial<WebsiteSettings>;
+        // Backup before replacing the editor draft. Nothing is published here.
+        backupWebsiteDraft(businessId, { business, sections, savedAt: new Date().toISOString() }, "DB 템플릿 적용 전 백업");
+        setSections(newSections);
+        updateWebsiteSettings(newSettings);
+        setSelection({ area: "hero", sectionId: newSections[0].id,
+          layoutId: normalizeHeroLayouts(newSections[0].content)[0]?.id });
+        setTemplatePickerOpen(false);
+        setMessage(`DB 템플릿 ${templateId} · 버전 ${savedTemplate.version}을 초안에 적용했습니다. 서버 저장 후 반영됩니다.`);
+        return;
+      } catch {
+        // Invalid bindings never partially apply a template; use bundled defaults.
+      }
+    }
+    setMessage("DB 템플릿을 사용할 수 없어 기존 기본 템플릿을 초안에 적용합니다.");
+    const templateSectionIdBase = -Date.now() * 1000;
+    const generated: BusinessSection[] = [];
+    const makeSection = (title: string, cells: GridCell[], height: number, extra: Partial<SectionContent> = {}) => {
+      const grid: GridData = { id: createId("layout"), cells: cells.map((cell, index) => ({ ...cell, span: cells.length === 1 ? 4 : index === cells.length - 1 ? 4 - Math.floor(4 / cells.length) * index : Math.floor(4 / cells.length), width_percent: cell.width_percent ?? 100 / cells.length })), height: "large", height_px: height, mobile_height_px: Math.min(height, 420), layout_width_mode: "container" };
+      const section: BusinessSection = {
+        id: templateSectionIdBase - generated.length - 1, business_id: business.id, section_type: "custom", title,
+        content: { page_type: "home-section", background_type: "color", background_color: "#ffffff", grid, layouts: [grid], layer_width: "container", ...extra },
+        settings: {}, sort_order: generated.length, is_visible: true,
+      };
+      generated.push(section);
+      return section;
+    };
+    // Existing order/menu and policy pages retain their contents and identifiers.
+    const retained: BusinessSection[] = [];
+    // A template application replaces the entire design, including link pages.
+    const menuSlug = "";
+    const orderUrl = `/business/${business.id}/menu`;
+    const orderButton: GridCell = { ...defaultCell("button", "ONLINE ORDER"), span: 4, width_percent: 100, text_align: "center", vertical_align: "center", button_link_type: "external", button_link_value: orderUrl, url: orderUrl, background_color: "#b64032", color: "#ffffff" };
+    const mainImages = templateId === "restaurant-1" ? images.slider : images.hero;
+    const hero: GridCell = { ...defaultCell("image"), display_mode: templateId === "restaurant-1" ? "auto-slider" : "image", image_url: mainImages[0], gallery_images: mainImages, image_fit: "cover", image_position_x: 50, image_position_y: 50, slider_auto_height: false, overlay_buttons: [], overlay_buttons_visible: false };
+    if (templateId === "restaurant-1") {
+      hero.overlay_buttons_visible = true;
+      hero.overlay_buttons = [{
+        id: createId("overlay-button"), text: "MENU - ONLINE ORDER",
+        url: orderUrl, link_type: "external", link_value: orderUrl,
+        style: "rounded", background_color: "#dc2626", text_color: "#ffffff",
+        font_size: 18, height: 48, x_percent: 80, y_percent: 88,
+        mobile_x_percent: 62, mobile_y_percent: 86,
+      }];
+    }
+    if (templateId !== "restaurant-1") {
+      hero.overlay_buttons_visible = true;
+      hero.overlay_buttons = [{ id: createId("overlay-button"), text: "ONLINE ORDER", url: orderUrl, link_type: "external", link_value: orderUrl, style: "rounded", background_color: "#dc2626", text_color: "#ffffff", font_size: 20, height: 52, x_percent: 80, y_percent: 88, mobile_x_percent: 62, mobile_y_percent: 86 }];
+    }
+    const home = makeSection("Home", [hero], templateId === "restaurant-1" ? 500 : 640);
+    home.section_type = "hero";
+    if (templateId === "restaurant-2") {
+      home.content.grid!.margin_bottom_px = 20;
+      home.content.grid!.mobile_margin_bottom_px = 20;
+    }
+    // Template 1 uses only the order button over the slider; no separate order row.
+    if (templateId === "restaurant-2") makeSection("Photo Scroll", [{ ...defaultCell("image"), display_mode: "image-scroll", gallery_images: images.scroll, image_scroll_speed: 28, image_scroll_width: 280, image_scroll_gap: 12 }], 220);
+    if (templateId === "restaurant-2") {
+      const photos = generated.find((section) => section.title === "Photo Scroll");
+      if (photos?.content.grid) {
+        photos.content.grid.margin_bottom_px = 20;
+        photos.content.grid.mobile_margin_bottom_px = 20;
+      }
+    }
+    const hours = makeSection("Business Hours", [{ ...defaultCell("hours"), display_mode: "business-hours", business_hours_title: "Business Hours", business_hours_data: parseBusinessTableHours(business.hours) }], 360);
+    hours.content.grid!.auto_height = true;
+    const privacy = retained.find(section => section.section_type === "privacy" || section.content.page_slug === "privacy");
+    const policySlug = privacy ? String(privacy.content.page_slug || slugifyMenuValue(privacy.title || "privacy")) : "privacy";
+    const contactHtml = [address, phone, email].filter(Boolean).map(value => `<p>${escapeCellText(value)}</p>`).join("") + `<p><a href="#${escapeCellText(policySlug)}">Privacy Policy</a></p>`;
+    const contacts: GridCell = { ...defaultCell("text"), text: [address, phone, email, "Privacy Policy"].filter(Boolean).join("\n"), rich_text_html: contactHtml, text_align: "center", vertical_align: "center", font_size: 16, width_percent: 50 };
+    const locationCells = [contacts];
+    locationCells.push({ ...defaultCell("map"), width_percent: 50, map_title: "LOCATION", map_address: address, map_phone: phone, map_email: email });
+    makeSection("Contact", locationCells, 360);
+    if (!privacy) {
+      const policy = makeSection("Privacy", [{ ...defaultCell("text", "Privacy Policy 내용을 입력해주세요."), text_align: "left", vertical_align: "top" }], 500, { popup_only: true, initially_hidden: true, close_button_enabled: true, scroll_on_open: true });
+      policy.section_type = "privacy";
+      policy.content.grid!.auto_height = true;
+    }
+    const header: GridData = { id: createId("header"), height: "small", height_px: 104, cells: [
+      { ...defaultCell("logo"), span: 1, width_percent: 20, image_url: String(websiteSettings.logo_url || business.logo_url || ""), logo_size_px: 80 },
+      { ...defaultCell("title", business.name || ""), span: 2, width_percent: 55, font_size: 28, text_align: "center", vertical_align: "center" },
+      { ...defaultCell("phone", phone), span: 1, width_percent: 25, font_size: 16, text_align: "center", vertical_align: "center", url: phone ? `tel:${phone}` : "" },
+    ] };
+    // Template 1 always uses the agreed restaurant structure. Retained policy
+    // content stays available through its link without becoming a visible row.
+    const retainedForTemplate = retained.map((section) =>
+      templateId === "restaurant-1" && section.section_type === "privacy"
+        ? { ...section, content: { ...section.content, popup_only: true,
+            initially_hidden: true, close_button_enabled: true } }
+        : section,
+    );
+    setSections([...generated, ...retainedForTemplate.map((section, index) => ({ ...section, sort_order: generated.length + index }))]);
+    updateWebsiteSettings({ header_height_px: 104, header_vertical_padding_px: 8, header_menu_font_size_px: 14, restaurant_template_id: templateId, website_industry: "restaurant", header_hidden: false, header_grid: header, header_submenu_enabled: false, order_only_mode: false, outer_background_color: "#ffffff", mobile_action_button_enabled: true, mobile_action_button_label: "ONLINE ORDER", mobile_action_target_url: orderUrl, mobile_hours_button_enabled: true, mobile_hours_target_url: "#business-hours" });
+    setSelection({ area: "hero", sectionId: home.id, layoutId: home.content.grid?.id, cellId: hero.id });
+    setTemplatePickerOpen(false);
+    setMessage("식당 기본 템플릿을 초안에 적용했습니다. 이미지·정책 내용을 확인하고 필요한 부분을 수정한 뒤 서버 저장·미리보기하고 Published로 런칭하세요.");
+  }
+
   // 주문전용 위치 레이어: 왼쪽 연락처, 오른쪽 지도. 영업시간 레이어는 생성하지 않습니다.
   function addOrderOnlyDefaultLayers() {
     if (!business) return;
@@ -10660,9 +10920,13 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 Number(localSection.sort_order) ===
                   Number(returnedSection.sort_order) &&
                 String(localSection.section_type) ===
-                  String(returnedSection.section_type),
+                  String(returnedSection.section_type) &&
+                String(localSection.title || "") === String(returnedSection.title || ""),
             ) ||
-            sectionsForSave[returnedIndex];
+            sectionsForSave.find((localSection) =>
+              String(localSection.title || "") === String(returnedSection.title || "") &&
+              String(localSection.section_type) === String(returnedSection.section_type),
+            );
 
           if (!matchingLocalSection) return returnedSection;
 
@@ -10725,8 +10989,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       if (selection.area === "hero") {
         const savedHero = normalizedReturnedSections.find(
           (section) =>
-            section.section_type === "hero" &&
-            section.content?.page_type !== "link-page",
+            section.id === selection.sectionId ||
+            (section.title === heroSection?.title &&
+              section.section_type === heroSection?.section_type),
         );
 
         if (savedHero) {
@@ -10809,6 +11074,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
   return (
     <main className="min-h-screen bg-[#eef1f5]">
+      {templatePickerOpen && (
+        <>
+          <RestaurantTemplatePicker businessId={businessId} onApply={applyRestaurantTemplate} onClose={() => setTemplatePickerOpen(false)} />
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2" style={{ zIndex: 2147483647 }}>
+            <button type="button" onClick={() => setTemplatePickerOpen(false)} className="rounded-full border border-gray-300 bg-white px-6 py-3 text-sm font-black text-gray-900 shadow-xl hover:bg-gray-100">
+              건너뛰고 기존 디자인 편집
+            </button>
+          </div>
+        </>
+      )}
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 lg:px-6">
           <div className="min-w-0">
@@ -10874,7 +11149,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               {restoringServerData ? "복구 중..." : "서버 데이터 복구"}
             </button>
-            <button
+            <button style={{ display: "none" }}
               type="button"
               aria-pressed={websiteSettings.order_only_mode === true}
               onClick={() => {
@@ -10916,7 +11191,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 ＋ 주문전용 기본 레이어 추가
               </button>
             ) : null}
-            <button
+            <button type="button" onClick={() => setTemplatePickerOpen(true)} className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800">기본 템플릿 선택</button>
+            <button style={{ display: "none" }}
               type="button"
               onClick={() => setMenuImportOpen(true)}
               className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800 hover:bg-orange-100"
@@ -10939,7 +11215,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               📝 캐터링 요청폼 넣기
             </button>
-            <button
+            <button style={{ display: "none" }}
               type="button"
               onClick={() => setMobileBottomButtonsOpen(true)}
               className="rounded-full border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-800 hover:bg-indigo-100"
@@ -11009,7 +11285,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               중간 저장
             </button>
-            <button
+            <button style={{ display: "none" }}
               type="button"
               disabled={Boolean(sharedDraftBusy)}
               onClick={() => void saveSharedDraft(editorRole)}
@@ -11022,7 +11298,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   ? "오너 작업본 공유"
                   : "관리자 작업본 공유"}
             </button>
-            <button
+            <button style={{ display: "none" }}
               type="button"
               disabled={Boolean(sharedDraftBusy)}
               onClick={() =>
@@ -11399,6 +11675,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   <div
                     style={{
                       ...getHeaderLayerWidthStyle(websiteSettings),
+            display: websiteSettings.header_hidden === true ? "none" : undefined,
                   backgroundColor: String(
                         websiteSettings.header_background_color || "#ffffff",
                       ),
@@ -12351,6 +12628,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               }`}
               style={{
                 ...getHeaderLayerWidthStyle(websiteSettings),
+            display: websiteSettings.header_hidden === true ? "none" : undefined,
                   backgroundColor: String(
                   websiteSettings.header_background_color || "#ffffff",
                 ),
@@ -12947,7 +13225,24 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         </label>
                       ) : null}
 
-                      {(selectedCell.type === "image" ||
+                      {(selectedCell.display_mode === "auto-slider" || selectedCell.display_mode === "image-scroll" || selectedCell.display_mode === "gallery") ? (
+                        <div className="mt-4">
+                          <p className="text-xs font-black text-blue-950">
+                            등록 이미지 · {(selectedCell.gallery_images || []).length}장
+                          </p>
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            {(selectedCell.gallery_images || []).map((url, index) => (
+                              <div key={`${url}-${index}`} className="overflow-hidden rounded-lg border border-blue-200 bg-white">
+                                <img src={url} alt={`슬라이드 ${index + 1}`} className="aspect-[12/5] w-full object-cover" />
+                                <p className="p-1 text-center text-xs font-bold">{index + 1}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-xs text-blue-700">사진 관리는 아래의 이미지 설정에서 할 수 있습니다.</p>
+                        </div>
+                      ) : null}
+
+                      {!["auto-slider", "image-scroll", "gallery"].includes(selectedCell.display_mode || "") && (selectedCell.type === "image" ||
                         selectedCell.type === "logo") ? (
                         <div className="mt-4 grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
                           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -13557,6 +13852,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
       {previewOpen ? (
         <CurrentWebsitePreview
+          preferredSectionId={selection.sectionId}
+          preferredLayoutId={selection.layoutId}
           business={business}
           sections={sections}
           websiteSettings={websiteSettings}
@@ -14535,12 +14832,62 @@ function isHomeLikeSection(section: BusinessSection) {
   );
 }
 
+// Suppress duplicate contact sections only when their actual contact and map
+// data match. Other sections and distinct contact locations remain visible.
+function contactLayoutKey(layout: GridData): string | null {
+  const cells = layout.cells;
+  const text = cells.find((cell) => cell.type === "text");
+  const map = cells.find((cell) => cell.type === "map" || cell.display_mode === "map-section");
+  if (!text || !map) return null;
+  if (cells.some((cell) => cell !== text && cell !== map && cell.type !== "empty")) return null;
+  const value = String(text.text || text.rich_text_html || "")
+    .replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ")
+    .replace(/[^a-zA-Z0-9가-힣]/g, "").toLowerCase();
+  return value || null;
+}
+
+function uniqueContactSections(sections: BusinessSection[], preferredSectionId?: number, preferredLayoutId?: string) {
+  const owners = new Map<string, { sectionIndex: number; layoutIndex: number; preferred: boolean }>();
+  const rows = sections.map((section) => ({ section, layouts:
+    section.content?.grid || section.content?.layouts?.length
+      ? normalizeHeroLayouts(section.content) : null }));
+  rows.forEach(({ section, layouts }, sectionIndex) => layouts?.forEach((layout, layoutIndex) => {
+    const key = contactLayoutKey(layout);
+    if (!key) return;
+    const preferred = section.id === preferredSectionId &&
+      (!preferredLayoutId || layout.id === preferredLayoutId);
+    const previous = owners.get(key);
+    if (!previous || preferred || !previous.preferred) {
+      owners.set(key, { sectionIndex, layoutIndex, preferred });
+    }
+  }));
+  return rows.flatMap(({ section, layouts }, sectionIndex) => {
+    if (!layouts) return [section];
+    const visibleLayouts = layouts.filter((layout, layoutIndex) => {
+      const key = contactLayoutKey(layout);
+      const owner = key ? owners.get(key) : null;
+      return !owner || (owner.sectionIndex === sectionIndex && owner.layoutIndex === layoutIndex);
+    });
+    return visibleLayouts.length ? [{ ...section, content: { ...section.content,
+      grid: visibleLayouts[0], layouts: visibleLayouts } }] : [];
+  });
+}
+
+function isPolicySection(section: BusinessSection) {
+  return section.section_type === "privacy" ||
+    /^(privacy(?:-policy)?|policy|terms(?:-and-conditions)?|팔리시|개인정보처리방침)$/.test(
+      slugifyMenuValue(String(section.content?.page_slug || section.title || "")),
+    );
+}
+
 function CurrentWebsitePreview({
   business,
-  sections,
+  sections: sourceSections,
   websiteSettings,
   device,
   initialPageSlug = "",
+  preferredSectionId,
+  preferredLayoutId,
   onDeviceChange,
   onClose,
 }: {
@@ -14549,9 +14896,14 @@ function CurrentWebsitePreview({
   websiteSettings: WebsiteSettings;
   device: "desktop" | "mobile";
   initialPageSlug?: string;
+  preferredSectionId?: number;
+  preferredLayoutId?: string;
   onDeviceChange: (device: "desktop" | "mobile") => void;
   onClose: () => void;
 }) {
+  const sections = useMemo(() => uniqueContactSections(sourceSections, preferredSectionId, preferredLayoutId).map((section) =>
+    isPolicySection(section) ? { ...section, content: { ...section.content, popup_only: false, collapsible: true, initially_hidden: true } } : section,
+  ), [sourceSections, preferredSectionId, preferredLayoutId]);
   const [openedPreviewLayerIds, setOpenedPreviewLayerIds] = useState<number[]>([]);
   const [previewPageSlug, setPreviewPageSlug] = useState(() =>
     slugifyMenuValue(initialPageSlug),
@@ -14773,6 +15125,7 @@ function CurrentWebsitePreview({
             }
             style={{
               ...getHeaderLayerWidthStyle(websiteSettings),
+            display: websiteSettings.header_hidden === true ? "none" : undefined,
                   backgroundColor: String(
                 websiteSettings.header_background_color || "#ffffff",
               ),
@@ -14993,6 +15346,7 @@ function CurrentWebsitePreview({
                   !isHomeLikeSection(section),
               )
               .map((section, sectionIndex, visibleSections) => {
+                if (isPolicySection(section) && !openedPreviewLayerIds.includes(section.id)) return null;
                 const isCollapsible = Boolean(
                   section.content?.collapsible,
                 );
@@ -15145,13 +15499,16 @@ function CurrentWebsitePreview({
 
 export function PublicWebsiteRenderer({
   business,
-  sections,
+  sections: sourceSections,
   pageSlug = "home",
 }: {
   business: Business;
   sections: BusinessSection[];
   pageSlug?: string;
 }) {
+  const sections = useMemo(() => uniqueContactSections(sourceSections).map((section) =>
+    isPolicySection(section) ? { ...section, content: { ...section.content, popup_only: true, initially_hidden: true } } : section,
+  ), [sourceSections]);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [openedLayerIds, setOpenedLayerIds] = useState<number[]>([]);
   const [popupLayerId, setPopupLayerId] = useState<number | null>(null);
@@ -15379,7 +15736,7 @@ export function PublicWebsiteRenderer({
         );
       });
 
-      if (!matchingSection) return;
+      if (!matchingSection || isPolicySection(matchingSection)) return;
 
       if (matchingSection.content?.popup_only === true) {
         setPopupLayerId(matchingSection.id);
@@ -16020,6 +16377,7 @@ export function PublicWebsiteRenderer({
           }
           style={{
             ...getHeaderLayerWidthStyle(websiteSettings),
+            display: websiteSettings.header_hidden === true ? "none" : undefined,
                   backgroundColor: String(
               websiteSettings.header_background_color || "#ffffff",
             ),
@@ -16042,7 +16400,7 @@ export function PublicWebsiteRenderer({
           </div>
         </header>
 
-        {device === "mobile" && !isMenuPage ? (
+        {device === "mobile" && !isMenuPage && websiteSettings.header_hidden !== true ? (
           <div
             aria-hidden="true"
             className="w-full shrink-0"
@@ -16818,6 +17176,19 @@ function UniversalOverlayButtons({
     "text" | "button" | null
   >(null);
 
+  // Existing sliders receive the same order action without reapplying a template.
+  if (cell.display_mode === "auto-slider" && !cell.overlay_buttons?.length) {
+    const settings = normalizeSettings(business.website_settings, business.name || "");
+    const orderUrl = String(settings.mobile_action_target_url || "/online-order");
+    cell = { ...cell, overlay_buttons_visible: true, overlay_buttons: [{
+      id: `${cell.id}-menu-order`, text: "MENU - ONLINE ORDER",
+      url: orderUrl, link_type: "external", link_value: orderUrl,
+      style: "rounded", background_color: "#dc2626", text_color: "#ffffff",
+      font_size: 18, height: 48, x_percent: 80, y_percent: 88,
+      mobile_x_percent: 62, mobile_y_percent: 86,
+    }] };
+  }
+
   const buttons = normalizeOverlayButtons(cell);
   const buttonsVisible =
     cell.overlay_buttons_visible ??
@@ -17125,14 +17496,18 @@ function UniversalOverlayButtons({
                   ? Number(button.y_percent)
                   : defaultY;
 
+            const isSliderOrder = (cell.display_mode === "auto-slider" || cell.type === "image") &&
+              /^(MENU\s*-\s*)?ONLINE ORDER$/i.test(button.text || "");
             return (
               <div
                 key={button.id}
                 className="absolute z-[73]"
                 style={{
-                  left: getButtonLeftStyle(buttonX),
-                  top: `${buttonY}%`,
-                  transform: "translate(-50%, -50%)",
+                  left: isSliderOrder ? undefined : getButtonLeftStyle(buttonX),
+                  right: isSliderOrder ? "16px" : undefined,
+                  bottom: isSliderOrder ? "24px" : undefined,
+                  top: isSliderOrder ? undefined : `${buttonY}%`,
+                  transform: isSliderOrder ? undefined : "translate(-50%, -50%)",
                   pointerEvents: "auto",
                   cursor: canDrag
                     ? draggingKind === "button" &&
@@ -17168,7 +17543,7 @@ function UniversalOverlayButtons({
                   }}
                   className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 font-black shadow-lg"
                   style={{
-                    width: `${Math.max(
+                    width: isSliderOrder ? "max-content" : `${Math.max(
                       70,
                       previewDevice === "mobile"
                         ? Math.min(
@@ -17185,6 +17560,9 @@ function UniversalOverlayButtons({
                           44,
                       ),
                     )}px`,
+                    maxWidth: isSliderOrder ? "calc(100vw - 32px)" : undefined,
+                    paddingLeft: isSliderOrder ? "22px" : undefined,
+                    paddingRight: isSliderOrder ? "22px" : undefined,
                     backgroundColor:
                       style === "outline"
                         ? "transparent"
@@ -17475,7 +17853,9 @@ function MobileWebsiteHeader({
   const titleCell = findFirstCellByType(grid.cells, "title");
   const menuCell = findFirstCellByType(grid.cells, "menu");
   const phoneCells = findAllCellsByType(grid.cells, "phone");
-  const buttonCells = findAllCellsByType(grid.cells, "button");
+  const buttonCells = findAllCellsByType(grid.cells, "button").filter((cell) =>
+    /online[\s-]*order|order[\s-]*online|온라인\s*오더|온라인\s*주문/i.test(String(cell.text || "")),
+  );
 
   const gridMenuItems = menuCell ? normalizeMenuItems(menuCell) : [];
   const submenuItems = Array.isArray(websiteSettings?.header_submenu_items)
@@ -17503,7 +17883,16 @@ function MobileWebsiteHeader({
 
   // 헤더 메뉴 셀이 중첩 칸 안에 있거나 비어 있어도,
   // 상단 서브메뉴 설정값을 이용해 모바일 메뉴가 반드시 표시되게 합니다.
-  const menuItems = gridMenuItems.length > 0 ? gridMenuItems : submenuItems;
+  const allMenuItems = gridMenuItems.length > 0 ? gridMenuItems : submenuItems;
+  const orderMenuItem = allMenuItems.find((item) =>
+    /online[\s-]*order|order[\s-]*online|온라인\s*오더|온라인\s*주문/i.test(item.label || ""),
+  );
+  const menuItems = buttonCells.length ? [] : [orderMenuItem || {
+    id: "mobile-online-order", label: "Online Order",
+    url: String(websiteSettings?.mobile_action_target_url || "/online-order"),
+    link_type: "external", link_value: String(websiteSettings?.mobile_action_target_url || "/online-order"),
+    image_url: "", children: [],
+  }];
 
   const mobileHeight = getMobileHeaderHeight(websiteSettings);
   const headerBackgroundColor = String(
@@ -17668,7 +18057,7 @@ function MobileWebsiteHeader({
               style={{ borderTop: `1px solid ${mobileControlColor}33` }}
             >
               {phoneCells.map((cell) => {
-                const number = String(cell.phone_number || cell.text || "").trim();
+                const number = String(cell.phone_number || cell.text || getBusinessContactValue(business, ["phone", "phone_number", "telephone", "business_phone", "contact_phone"]) || "").trim();
                 return number ? (
                   <a
                     key={cell.id}
@@ -17817,6 +18206,7 @@ function ReadOnlyGrid({
     area !== "header" &&
     renderedCells.length === 1 &&
     renderedCells[0]?.type === "image" &&
+    renderedCells[0]?.display_mode !== "auto-slider" &&
     Boolean(renderedCells[0]?.image_url) &&
     normalizeImageFit(renderedCells[0]?.image_fit) !== "fill";
 
@@ -18242,6 +18632,10 @@ function PreviewSection({
                       business={business}
                       accentColor={accentColor}
                       previewDevice={previewDevice}
+                      websiteSettings={{
+                        ...normalizeSettings(business.website_settings, business.name || ""),
+                        outer_background_color: outerBackgroundColor,
+                      }}
                     />
                   </div>
 
@@ -20614,6 +21008,68 @@ function CellPreview({
       </a>
     );
   }
+    if (cell.display_mode === "auto-slider") {
+      const images = Array.isArray(cell.gallery_images)
+        ? cell.gallery_images
+        : [];
+
+      return images.length ? (
+        <AutoImageSlider
+          images={images}
+          autoHeight={cell.slider_auto_height !== false}
+          mobile={previewDevice === "mobile"}
+          overlayText={cell.overlay_text || ""}
+          overlayColor={cell.color || "#ffffff"}
+          overlayFontSize={cell.font_size ?? 38}
+          overlayFontFamily={cell.font_family ?? "sans"}
+          overlayFontWeight={cell.font_weight ?? "black"}
+          overlayHorizontal={cell.overlay_text_horizontal ?? "center"}
+          overlayVertical={cell.overlay_text_vertical ?? "middle"}
+          overlayBackgroundColor={cell.background_color || "transparent"}
+        />
+      ) : (
+        <span className="text-sm font-black opacity-70">
+          슬라이드 이미지를 선택해주세요
+        </span>
+      );
+    }
+
+
+    if (cell.display_mode === "image-scroll") {
+      const images = Array.isArray(cell.gallery_images)
+        ? cell.gallery_images
+        : [];
+
+      return images.length ? (
+        <div
+          className="absolute inset-0 block h-full w-full overflow-hidden"
+          style={{ margin: 0, padding: 0, lineHeight: 0 }}
+        >
+          <HorizontalImageScroll
+            images={images}
+            speed={cell.image_scroll_speed ?? 28}
+            direction={cell.image_scroll_direction ?? "left"}
+            imageWidth={cell.image_scroll_width ?? 280}
+            gap={cell.image_scroll_gap ?? 12}
+          />
+        </div>
+      ) : (
+        <span className="text-sm font-black opacity-70">
+          흐르는 이미지를 선택해주세요
+        </span>
+      );
+    }
+
+    if (cell.display_mode === "gallery") {
+      return (
+        <ImageGalleryGrid
+          cell={cell}
+          mobile={previewDevice === "mobile"}
+        />
+      );
+    }
+
+
   if (cell.type === "image") {
     if (!cell.image_url) {
       return <span className="text-sm font-bold opacity-70">이미지</span>;
@@ -21143,7 +21599,12 @@ function CellPreview({
     );
   }
   if (cell.type === "phone") {
-    const phoneNumber = String(cell.phone_number || cell.text || "").trim();
+    const savedPhone = [cell.phone_number, cell.text].find((value) =>
+      typeof value === "string" && /\d{3}/.test(value),
+    );
+    const phoneNumber = String(savedPhone || getBusinessContactValue(business,
+      ["phone", "phone_number", "telephone", "business_phone", "contact_phone"],
+    ) || "").trim();
     const phoneHref = normalizePhoneHref(phoneNumber);
 
     if (!phoneNumber) {
@@ -21333,6 +21794,26 @@ function CellPreview({
         </div>
       );
   }
+    if (cell.display_mode === "business-hours") {
+      return (
+        <div
+          className={`${
+            previewDevice === "mobile"
+              ? "relative h-auto w-full overflow-visible rounded-[10px] px-0 py-2"
+              : "relative h-auto w-full overflow-visible rounded-[10px] p-4 sm:p-6"
+          }`}
+          style={{ backgroundColor: cell.background_color || "#ffffff" }}
+        >
+          <BusinessHoursDisplay
+            cell={cell}
+            businessHours={business.hours}
+            mobilePreview={previewDevice === "mobile"}
+          />
+        </div>
+      );
+    }
+
+
   if (cell.type === "hours") return <span className="whitespace-pre-line text-sm font-semibold">{cell.text || "Mon–Fri 9:00 AM–6:00 PM"}</span>;
   if (cell.type === "title") {
     if (cell.display_mode === "restaurant-menu") {
@@ -21392,25 +21873,6 @@ function CellPreview({
           formBackgroundColor={
             cell.catering_request_form_background_color || "#ffffff"
           }
-          />
-        </div>
-      );
-    }
-
-    if (cell.display_mode === "business-hours") {
-      return (
-        <div
-          className={`${
-            previewDevice === "mobile"
-              ? "relative h-auto w-full overflow-visible rounded-[10px] px-0 py-2"
-              : "absolute inset-0 h-full w-full overflow-auto rounded-[10px] p-4 sm:p-6"
-          }`}
-          style={{ backgroundColor: cell.background_color || "#ffffff" }}
-        >
-          <BusinessHoursDisplay
-            cell={cell}
-            businessHours={business.hours}
-            mobilePreview={previewDevice === "mobile"}
           />
         </div>
       );
@@ -21657,66 +22119,6 @@ function CellPreview({
             </>
           ) : null}
         </>
-      );
-    }
-
-    if (cell.display_mode === "auto-slider") {
-      const images = Array.isArray(cell.gallery_images)
-        ? cell.gallery_images
-        : [];
-
-      return images.length ? (
-        <AutoImageSlider
-          images={images}
-          autoHeight={cell.slider_auto_height !== false}
-          mobile={previewDevice === "mobile"}
-          overlayText={cell.overlay_text || ""}
-          overlayColor={cell.color || "#ffffff"}
-          overlayFontSize={cell.font_size ?? 38}
-          overlayFontFamily={cell.font_family ?? "sans"}
-          overlayFontWeight={cell.font_weight ?? "black"}
-          overlayHorizontal={cell.overlay_text_horizontal ?? "center"}
-          overlayVertical={cell.overlay_text_vertical ?? "middle"}
-          overlayBackgroundColor={cell.background_color || "transparent"}
-        />
-      ) : (
-        <span className="text-sm font-black opacity-70">
-          슬라이드 이미지를 선택해주세요
-        </span>
-      );
-    }
-
-    if (cell.display_mode === "image-scroll") {
-      const images = Array.isArray(cell.gallery_images)
-        ? cell.gallery_images
-        : [];
-
-      return images.length ? (
-        <div
-          className="absolute inset-0 block h-full w-full overflow-hidden"
-          style={{ margin: 0, padding: 0, lineHeight: 0 }}
-        >
-          <HorizontalImageScroll
-            images={images}
-            speed={cell.image_scroll_speed ?? 28}
-            direction={cell.image_scroll_direction ?? "left"}
-            imageWidth={cell.image_scroll_width ?? 280}
-            gap={cell.image_scroll_gap ?? 12}
-          />
-        </div>
-      ) : (
-        <span className="text-sm font-black opacity-70">
-          흐르는 이미지를 선택해주세요
-        </span>
-      );
-    }
-
-    if (cell.display_mode === "gallery") {
-      return (
-        <ImageGalleryGrid
-          cell={cell}
-          mobile={previewDevice === "mobile"}
-        />
       );
     }
 
@@ -29029,126 +29431,22 @@ function RightPanel(props: {
                       ) : (
                         <>
                           <label className="text-[11px] font-black text-gray-700">
-                            연결할 PAGE
-                            <select
-                              value={
-                                button.link_type === "page"
-                                  ? slugifyMenuValue(button.link_value || "")
-                                  : ""
-                              }
-                              onChange={(event) => {
-                                const pageSlug = event.target.value;
-
-                                props.onUpdateCell(
-                                  area,
-                                  selectedCell.id,
-                                  {
-                                    overlay_buttons:
-                                      normalizeOverlayButtons(
-                                        selectedCell,
-                                      ).map((item) =>
-                                        item.id === button.id
-                                          ? {
-                                              ...item,
-                                              link_type: "page",
-                                              link_value: pageSlug,
-                                              url: "",
-                                            }
-                                          : item,
-                                      ),
-                                  },
-                                  selection.layoutId,
-                                );
-                              }}
+                            연결할 링크 주소
+                            <input
+                              type="text"
+                              value={buildOverlayButtonUrl(button, props.businessId)}
+                              placeholder="https://example.com/order 또는 /menu"
+                              onChange={(event) => props.onUpdateCell(
+                                area, selectedCell.id,
+                                { overlay_buttons: normalizeOverlayButtons(selectedCell).map((item) =>
+                                  item.id === button.id ? { ...item, link_type: "external",
+                                    link_value: event.target.value, url: event.target.value,
+                                    category_query: "" } : item,
+                                ) }, selection.layoutId,
+                              )}
                               className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
-                            >
-                              <option value="">PAGE 선택</option>
-                              {props.sections
-                                .filter(
-                                  (section) =>
-                                    section.content?.page_type === "link-page" &&
-                                    section.is_visible !== false,
-                                )
-                                .sort(
-                                  (a, b) =>
-                                    Number(a.sort_order) -
-                                    Number(b.sort_order),
-                                )
-                                .map((section) => {
-                                  const pageSlug = slugifyMenuValue(
-                                    String(
-                                      section.content?.page_slug ||
-                                        section.title ||
-                                        "",
-                                    ),
-                                  );
-
-                                  if (!pageSlug) return null;
-
-                                  return (
-                                    <option
-                                      key={`overlay-page-${section.id}`}
-                                      value={pageSlug}
-                                    >
-                                      {String(
-                                        section.title ||
-                                          section.content?.page_slug ||
-                                          `PAGE ${section.id}`,
-                                      )}
-                                    </option>
-                                  );
-                                })}
-                            </select>
+                            />
                           </label>
-
-                          <label className="text-[11px] font-black text-gray-700">
-                            카테고리
-                            <select
-                              value={sanitizeCateringCategoryQuery(
-                                button.category_query,
-                              )}
-                              onChange={(event) =>
-                                props.onUpdateCell(
-                                  area,
-                                  selectedCell.id,
-                                  {
-                                    overlay_buttons:
-                                      normalizeOverlayButtons(
-                                        selectedCell,
-                                      ).map((item) =>
-                                        item.id === button.id
-                                          ? {
-                                              ...item,
-                                              category_query:
-                                                event.target.value,
-                                            }
-                                          : item,
-                                      ),
-                                  },
-                                  selection.layoutId,
-                                )
-                              }
-                              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold"
-                            >
-                              <option value="">카테고리 선택</option>
-                              {CATERING_CATEGORY_PRESETS.map((category) => (
-                                <option key={category} value={category}>
-                                  {category}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-
-                          {button.link_type === "page" &&
-                          String(button.link_value || "").trim() ? (
-                            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold leading-5 text-blue-800">
-                              자동 링크:{" "}
-                              {buildOverlayButtonUrl(
-                                button,
-                                props.businessId,
-                              )}
-                            </div>
-                          ) : null}
                         </>
                       )}
 
@@ -29330,6 +29628,7 @@ function RightPanel(props: {
                   label="버튼 색상"
                   value={
                     selectedCell.overlay_button_group_color ??
+                    normalizeOverlayButtons(selectedCell)[0]?.background_color ??
                     "#111827"
                   }
                   onChange={(value) =>
@@ -29348,6 +29647,7 @@ function RightPanel(props: {
                   label="글자색"
                   value={
                     selectedCell.overlay_button_group_text_color ??
+                    normalizeOverlayButtons(selectedCell)[0]?.text_color ??
                     "#ffffff"
                   }
                   onChange={(value) =>
