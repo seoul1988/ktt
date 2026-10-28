@@ -74,6 +74,8 @@ type Props = {
   descriptionColor?: string;
   priceColor?: string;
   serviceBarBackgroundColor?: string;
+  serviceTextColor?: string;
+  serviceActiveTextColor?: string;
   categoryBarBackgroundColor?: string;
   categoryPillBackgroundColor?: string;
   categoryPillTextColor?: string;
@@ -220,6 +222,8 @@ export default function RestaurantMenu({
   descriptionColor,
   priceColor,
   serviceBarBackgroundColor,
+  serviceTextColor,
+  serviceActiveTextColor,
   categoryBarBackgroundColor,
   categoryPillBackgroundColor,
   categoryPillTextColor,
@@ -1437,17 +1441,17 @@ export default function RestaurantMenu({
       }}
     >
       <style>{`
-        @media (max-width: 639px) {
+
           [data-compact-order-menu] [data-service-options] { gap: 0; }
           [data-compact-order-menu] [data-service-choice] {
             min-height: 32px; padding: 5px 16px; font-size: 11px;
             border: 0; border-radius: 0; box-shadow: none;
-            background: #252525; color: #bdbdbd;
+            background: #252525;
           }
           [data-compact-order-menu] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
           [data-compact-order-menu] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
           [data-compact-order-menu] [data-service-choice][aria-pressed="true"] {
-            border-radius: 999px; background: #f5f5f5; color: #111827;
+            border-radius: 999px; background: #f5f5f5;
           }
           [data-category-text-bar] { box-shadow: none; border: 0; }
           [data-category-track] { display: block; }
@@ -1455,41 +1459,13 @@ export default function RestaurantMenu({
           [data-category-text-tab] {
             border: 0 !important; border-bottom: 2px solid transparent !important;
             border-radius: 0; background: transparent !important;
-            color: inherit !important; opacity: .65; box-shadow: none;
+            opacity: 1; box-shadow: none;
             padding: 10px 8px; font-size: 12px; text-transform: none;
           }
           [data-category-text-tab][aria-current="true"] {
             border-bottom-color: #ef3340 !important; opacity: 1;
           }
           [data-compact-order-menu] [data-category-section-heading] {
-            background: transparent !important; padding: 0; font-size: 24px;
-          }
-        }
-
-          [data-compact-order-menu][data-mobile-preview="true"] [data-service-options] { gap: 0; }
-          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice] {
-            min-height: 32px; padding: 5px 16px; font-size: 11px;
-            border: 0; border-radius: 0; box-shadow: none;
-            background: #252525; color: #bdbdbd;
-          }
-          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
-          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
-          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice][aria-pressed="true"] {
-            border-radius: 999px; background: #f5f5f5; color: #111827;
-          }
-          [data-category-text-bar][data-mobile-preview="true"] { box-shadow: none; border: 0; }
-          [data-category-text-bar][data-mobile-preview="true"] [data-category-track] { display: block; }
-          [data-category-text-bar][data-mobile-preview="true"] [data-category-scroll-arrow] { display: none; }
-          [data-category-text-bar][data-mobile-preview="true"] [data-category-text-tab] {
-            border: 0 !important; border-bottom: 2px solid transparent !important;
-            border-radius: 0; background: transparent !important;
-            color: inherit !important; opacity: .65; box-shadow: none;
-            padding: 10px 8px; font-size: 12px; text-transform: none;
-          }
-          [data-category-text-bar][data-mobile-preview="true"] [data-category-text-tab][aria-current="true"] {
-            border-bottom-color: #ef3340 !important; opacity: 1;
-          }
-          [data-compact-order-menu][data-mobile-preview="true"] [data-category-section-heading] {
             background: transparent !important; padding: 0; font-size: 24px;
           }
       `}</style>
@@ -1528,6 +1504,7 @@ export default function RestaurantMenu({
               <button
                 type="button"
                 data-service-choice
+                style={{ color: activeService === "pickup" ? (serviceActiveTextColor || "#111827") : (serviceTextColor || "#bdbdbd") }}
                 aria-pressed={activeService === "pickup"}
                 onClick={() => setActiveService("pickup")}
                 className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
@@ -1548,6 +1525,7 @@ export default function RestaurantMenu({
               <button
                 type="button"
                 data-service-choice
+                style={{ color: activeService === "delivery" ? (serviceActiveTextColor || "#111827") : (serviceTextColor || "#bdbdbd") }}
                 aria-pressed={activeService === "delivery"}
                 onClick={() => setActiveService("delivery")}
                 className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${

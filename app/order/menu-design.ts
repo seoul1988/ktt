@@ -52,6 +52,8 @@ export function resolveOrderDesign(sections: unknown, settings: unknown) {
       descriptionColor: text(source.restaurant_menu_description_color),
       priceColor: text(source.restaurant_menu_price_color),
       serviceBarBackgroundColor: text(source.restaurant_menu_service_bar_background_color),
+      serviceTextColor: text(source.restaurant_menu_service_text_color),
+      serviceActiveTextColor: text(source.restaurant_menu_service_active_text_color),
       categoryBarBackgroundColor: text(source.restaurant_menu_category_bar_background_color),
       categoryPillBackgroundColor: text(source.restaurant_menu_category_pill_background_color),
       categoryPillTextColor: text(source.restaurant_menu_category_pill_text_color),

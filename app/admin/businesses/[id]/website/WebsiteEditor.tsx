@@ -190,6 +190,8 @@ type GridCell = {
   restaurant_menu_description_color?: string;
   restaurant_menu_price_color?: string;
   restaurant_menu_service_bar_background_color?: string;
+  restaurant_menu_service_text_color?: string;
+  restaurant_menu_service_active_text_color?: string;
   restaurant_menu_category_bar_background_color?: string;
   restaurant_menu_category_pill_background_color?: string;
   restaurant_menu_category_pill_text_color?: string;
@@ -11207,7 +11209,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               {restoringServerData ? "복구 중..." : "서버 데이터 복구"}
             </button>
-            <button style={{ display: "none" }}
+            <button
               type="button"
               aria-pressed={websiteSettings.order_only_mode === true}
               onClick={() => {
@@ -22012,6 +22014,8 @@ function CellPreview({
             descriptionColor={cell.restaurant_menu_description_color}
             priceColor={cell.restaurant_menu_price_color}
             serviceBarBackgroundColor={cell.restaurant_menu_service_bar_background_color}
+            serviceTextColor={cell.restaurant_menu_service_text_color}
+            serviceActiveTextColor={cell.restaurant_menu_service_active_text_color}
             categoryBarBackgroundColor={cell.restaurant_menu_category_bar_background_color}
             categoryPillBackgroundColor={cell.restaurant_menu_category_pill_background_color}
             categoryPillTextColor={cell.restaurant_menu_category_pill_text_color}
@@ -37743,6 +37747,8 @@ function TitleCellEditor({
               ["restaurant_menu_description_color", "메뉴 설명", "#6b7280"],
               ["restaurant_menu_price_color", "메뉴 가격", "#111827"],
               ["restaurant_menu_service_bar_background_color", "픽업·딜리버리 줄 배경", "#ffffff"],
+              ["restaurant_menu_service_text_color", "픽업·배달 글자", "#bdbdbd"],
+              ["restaurant_menu_service_active_text_color", "선택된 픽업·배달 글자", "#111827"],
               ["restaurant_menu_category_bar_background_color", "카테고리 줄 전체 배경", "#ffffff"],
               ["restaurant_menu_category_pill_background_color", "상단 카테고리 라운드 배경", "#111827"],
               ["restaurant_menu_category_pill_text_color", "상단 카테고리 글자", "#ffffff"],
