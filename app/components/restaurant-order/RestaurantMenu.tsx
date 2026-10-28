@@ -1314,6 +1314,7 @@ export default function RestaurantMenu({
     return (
       <div
         data-category-text-bar
+        data-mobile-preview={compact ? "true" : undefined}
         ref={categoryBarMeasureRef}
         className={`${
           fixed
@@ -1428,6 +1429,7 @@ export default function RestaurantMenu({
     <div
       ref={rootRef}
       data-compact-order-menu
+      data-mobile-preview={compact ? "true" : undefined}
       className="relative w-full"
       style={{
         backgroundColor: "transparent",
@@ -1463,6 +1465,33 @@ export default function RestaurantMenu({
             background: transparent !important; padding: 0; font-size: 24px;
           }
         }
+
+          [data-compact-order-menu][data-mobile-preview="true"] [data-service-options] { gap: 0; }
+          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice] {
+            min-height: 32px; padding: 5px 16px; font-size: 11px;
+            border: 0; border-radius: 0; box-shadow: none;
+            background: #252525; color: #bdbdbd;
+          }
+          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
+          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
+          [data-compact-order-menu][data-mobile-preview="true"] [data-service-choice][aria-pressed="true"] {
+            border-radius: 999px; background: #f5f5f5; color: #111827;
+          }
+          [data-category-text-bar][data-mobile-preview="true"] { box-shadow: none; border: 0; }
+          [data-category-text-bar][data-mobile-preview="true"] [data-category-track] { display: block; }
+          [data-category-text-bar][data-mobile-preview="true"] [data-category-scroll-arrow] { display: none; }
+          [data-category-text-bar][data-mobile-preview="true"] [data-category-text-tab] {
+            border: 0 !important; border-bottom: 2px solid transparent !important;
+            border-radius: 0; background: transparent !important;
+            color: inherit !important; opacity: .65; box-shadow: none;
+            padding: 10px 8px; font-size: 12px; text-transform: none;
+          }
+          [data-category-text-bar][data-mobile-preview="true"] [data-category-text-tab][aria-current="true"] {
+            border-bottom-color: #ef3340 !important; opacity: 1;
+          }
+          [data-compact-order-menu][data-mobile-preview="true"] [data-category-section-heading] {
+            background: transparent !important; padding: 0; font-size: 24px;
+          }
       `}</style>
       {orderingAvailable ? (
         <div

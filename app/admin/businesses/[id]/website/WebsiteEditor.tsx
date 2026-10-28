@@ -12931,6 +12931,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             ) : null}
 
           </div>
+          {device === "mobile" && sections.some((section) =>
+            sectionContainsRestaurantMenu(section) || section.content?.link_page_kind === "restaurant-menu"
+          ) ? <div className="sticky bottom-0 z-40 mx-auto w-full max-w-[430px]">
+            <SavedOrderMobileBottom business={business} sections={sections} preview />
+          </div> : null}
         </section>
 
         {!selectedCell ? (
@@ -40743,4 +40748,68 @@ export function SavedOrderWebsiteHeader({ business }: { business: Business }) {
       </div>
     </header>
   );
+}
+
+export function SavedOrderMobileBottom({ business, sections, preview = false }: { business: Business; sections: BusinessSection[]; preview?: boolean }) {
+  const [count, setCount] = useState(0);
+  const [hoursOpen, setHoursOpen] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    setReady(true);
+    const key = `restaurant-order-cart:${business.id}`;
+    const sync = (event?: Event) => {
+      if (event instanceof CustomEvent && Number(event.detail?.businessId) !== business.id) return;
+      try {
+        const items = JSON.parse(window.localStorage.getItem(key) || "[]");
+        setCount(Array.isArray(items) ? items.reduce((sum: number, item: { quantity?: number }) => sum + Math.max(1, Number(item?.quantity) || 1), 0) : 0);
+      } catch { setCount(0); }
+    };
+    sync();
+    window.addEventListener("restaurant-order-cart-updated", sync);
+    window.addEventListener("storage", sync);
+    const timer = window.setInterval(() => tick((value) => value + 1), 60000);
+    return () => {
+      window.removeEventListener("restaurant-order-cart-updated", sync);
+      window.removeEventListener("storage", sync);
+      window.clearInterval(timer);
+    };
+  }, [business.id]);
+  const settings = normalizeSettings(business.website_settings, business.name || "");
+  const target = String(settings.mobile_hours_target_url || "#hours").replace(/^#/, "").toLowerCase();
+  const hoursSection = sections.find((section) => String(section.title || "").trim().toLowerCase() === target)
+    || sections.find((section) => /^(hours|business[- ]?hours|영업시간)$/i.test(String(section.title || "").trim()));
+  const status = getBusinessOpenStatus(parseBusinessTableHours(business.hours));
+  if (!ready) return null;
+  const content = <>
+    <nav aria-label="Mobile order navigation" className={`${preview ? "sticky bottom-0 z-40" : "fixed inset-x-0 bottom-0 z-[12000] sm:hidden"} border-t border-gray-200 bg-white px-2 pt-1.5 text-gray-950 shadow-lg`}
+      style={{ paddingBottom: "max(6px, env(safe-area-inset-bottom, 0px))" }}>
+      <div className="grid grid-cols-[64px_minmax(0,1fr)_96px] items-center gap-1">
+        <button type="button" aria-label="뒤로가기" onClick={() => {
+          if (preview) return;
+          if (window.history.length > 1) window.history.back();
+          else window.location.assign("/order");
+        }} className="flex min-h-[56px] flex-col items-center justify-center rounded-xl active:bg-gray-100">
+          <span className="text-2xl" aria-hidden="true">←</span><span className="text-[10px] font-bold">BACK</span>
+        </button>
+        <button type="button" onClick={() => setHoursOpen(true)} className="flex min-h-[56px] min-w-0 flex-col items-center justify-center rounded-xl px-1 active:bg-gray-100">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${status.tone === "open" ? "bg-emerald-500 text-white" : "bg-gray-900 text-white"}`}>{status.label}</span>
+          <span className="mt-1 text-[10px] font-black">BUSINESS HOURS</span>
+          <span className="w-full truncate text-center text-[9px] text-gray-500">{status.detail}</span>
+        </button>
+        <button type="button" aria-label={`Open cart, ${count} items`} onClick={() => window.dispatchEvent(new CustomEvent("restaurant-order-open-cart", { detail: { businessId: business.id, handled: false } }))}
+          className="flex min-h-[56px] flex-col items-center justify-center rounded-xl bg-gray-950 px-2 text-white active:bg-gray-800">
+          <span aria-hidden="true" className="text-lg">🛒 <span className="text-xs font-black">{count}</span></span><span className="mt-1 text-[10px] font-black">VIEW CART</span>
+        </button>
+      </div>
+    </nav>
+    {hoursOpen ? <div className="fixed inset-0 z-[13000] flex items-center justify-center bg-black/60 p-3" onClick={() => setHoursOpen(false)}>
+      <section role="dialog" aria-modal="true" aria-label="Business hours" className="max-h-[85dvh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-4 text-gray-950" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-black">Business Hours</h2><button type="button" aria-label="Close business hours" onClick={() => setHoursOpen(false)} className="h-10 w-10 rounded-full bg-gray-100 text-2xl">×</button></div>
+        {hoursSection ? normalizeHeroLayouts(hoursSection.content).map((grid, index) => <ReadOnlyGrid key={grid.id || index} area="hero" grid={grid} business={business} accentColor={String(settings.accent_color || "#d97706")} previewDevice="mobile" websiteSettings={settings} />)
+          : <p className="py-4 font-bold">{status.label} · {status.detail}</p>}
+      </section>
+    </div> : null}
+  </>;
+  return preview ? content : createPortal(content, document.body);
 }

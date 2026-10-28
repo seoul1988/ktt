@@ -1,4 +1,4 @@
-import { SavedOrderWebsiteHeader } from "@/app/admin/businesses/[id]/website/WebsiteEditor";
+import { SavedOrderWebsiteHeader, SavedOrderMobileBottom } from "@/app/admin/businesses/[id]/website/WebsiteEditor";
 import { notFound } from "next/navigation";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
 import StoreSelector from "@/app/components/restaurant-brand/StoreSelector";
@@ -13,9 +13,9 @@ async function SelectedStoreMenu({ id, name, address, changeLocation }: {
   id: number; name: string; address?: string | null; changeLocation?: string;
 }) {
   const [businessResult, sectionsResult] = await Promise.all([
-    supabaseAdmin.from("businesses").select("id,name,address,phone,website_settings").eq("id", id).maybeSingle(),
+    supabaseAdmin.from("businesses").select("id,name,address,phone,hours,website_settings").eq("id", id).maybeSingle(),
     supabaseAdmin.from("business_sections")
-      .select("id,content,is_visible,sort_order")
+      .select("id,business_id,section_type,title,content,settings,is_visible,sort_order")
       .eq("business_id", id).order("sort_order", { ascending: true }).order("id", { ascending: true }),
   ]);
   if (businessResult.error || sectionsResult.error) {
@@ -24,14 +24,15 @@ async function SelectedStoreMenu({ id, name, address, changeLocation }: {
   }
   const design = resolveOrderDesign(sectionsResult.data, businessResult.data?.website_settings);
   return (
-    <main className="min-h-screen" style={{ backgroundColor: design.outerBackgroundColor }}>
+    <main className="min-h-screen pb-24 sm:pb-0" style={{ backgroundColor: design.outerBackgroundColor }}>
       <SavedOrderWebsiteHeader business={{
         id, name, address, phone: businessResult.data?.phone,
         website_settings: businessResult.data?.website_settings,
       }} />
       <div className={`mx-auto w-full ${design.widthClass}`}>
-        <RestaurantMenu key={id} businessId={id} changeLocationHref={changeLocation} {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
+        <RestaurantMenu key={id} businessId={id} changeLocationHref={changeLocation} externalCartButton {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
       </div>
+      <SavedOrderMobileBottom business={{ id, name, address, hours: businessResult.data?.hours, website_settings: businessResult.data?.website_settings }} sections={sectionsResult.data || []} />
     </main>
   );
 }
