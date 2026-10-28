@@ -6667,6 +6667,9 @@ function MenuImportModal({
     setImportError("");
     setResult("");
 
+    let activeMenu = "CSV 분석";
+    let savedCount = 0;
+    let skippedCount = 0;
     try {
       let rows: MenuImportRow[] = [];
       let optionAttachResult = { attached: 0, unmatched: 0 };
@@ -6855,6 +6858,7 @@ function MenuImportModal({
       // ChowNow 메뉴 CSV + 옵션 CSV 동기화에서는
       // 카테고리를 메뉴별 옵션 저장과 분리해서 먼저 한 번에 처리합니다.
       if (syncExistingChowNow) {
+        activeMenu = "카테고리 동기화";
         const categorySyncForm = new FormData();
         categorySyncForm.append("platform", platform);
         categorySyncForm.append("sourcePlatform", platform);
@@ -6929,6 +6933,7 @@ function MenuImportModal({
 
       for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index];
+        activeMenu = `${index + 1}/${rows.length} · ${row.category} · ${row.name}`;
 
         if (row.category) {
           categoryNames.add(row.category);
@@ -7067,11 +7072,13 @@ function MenuImportModal({
             String(
               payload.error ||
                 payload.message ||
-                `${row.name} 저장 실패`,
+                `${row.name} 저장 실패 (HTTP ${response.status})`,
             ),
           );
         }
 
+        if (payload.skipped) skippedCount += 1;
+        else savedCount += 1;
         setProgress({
           current: index + 1,
           total: rows.length,
@@ -7099,11 +7106,12 @@ function MenuImportModal({
           }`,
         );
       }
+      setResult((previous) => `${previous}\n서버 응답 기준: 저장 ${savedCount}개 / 건너뜀 ${skippedCount}개`.trim());
     } catch (error) {
       setImportError(
-        error instanceof Error
-          ? error.message
-          : "메뉴 가져오기에 실패했습니다.",
+        `중단 위치: ${activeMenu}\n저장 응답 ${savedCount}개 / 건너뜀 ${skippedCount}개\n` +
+        (error instanceof Error ? error.message : "메뉴 가져오기에 실패했습니다.") +
+        "\n이미 저장된 메뉴는 유지됩니다. 재시도할 때 ‘기존 메뉴를 지우고 새 메뉴로 교체’를 해제하세요.",
       );
     } finally {
       importInFlightRef.current = false;
@@ -7245,7 +7253,7 @@ function MenuImportModal({
           ) : null}
 
           {result ? <div className="rounded-xl bg-emerald-50 p-3 text-xs font-black leading-5 text-emerald-800">{result}</div> : null}
-          {importError ? <div className="rounded-xl bg-red-50 p-3 text-xs font-bold leading-5 text-red-700">{importError}</div> : null}
+          {importError ? <div className="whitespace-pre-wrap rounded-xl bg-red-50 p-3 text-xs font-bold leading-5 text-red-700">{importError}</div> : null}
         </div>
 
         <div className="grid grid-cols-2 gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3.5">

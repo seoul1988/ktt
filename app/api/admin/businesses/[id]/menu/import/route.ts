@@ -47,7 +47,7 @@ function safeFileStem(value: string) {
   return (
     String(value || "menu")
       .normalize("NFKD")
-      .replace(/[^a-zA-Z0-9가-힣-_]+/g, "-")
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 100) || "menu"
@@ -135,6 +135,7 @@ function parseImportedOptionGroupMeta(
     }
   }
 
+  if (required && minSelect === 0) minSelect = 1;
   name = name.split(/\b(?:REQUIRED|OPTIONAL)\b/i)[0].trim() || "Options";
   return { name, required, minSelect, maxSelect };
 }
@@ -863,6 +864,7 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  let requestedMenuName = "";
   try {
     const { id } = await context.params;
     const businessId = Number(id);
@@ -887,6 +889,7 @@ export async function POST(
       String(formData.get("category") || "Menu").trim() || "Menu";
 
     const name = String(formData.get("name") || "").trim();
+    requestedMenuName = name;
     const description = String(formData.get("description") || "").trim();
 
     const rawPrice = String(formData.get("price") || "").trim();
@@ -931,7 +934,24 @@ export async function POST(
     const categoryMenuMap = parseCategoryMenuMap(formData);
     const uniqueCategories = parseUniqueCategories(formData);
 
-    const optionGroups = parseOptionGroups(formData);
+    let optionGroups: UnifiedOptionGroup[];
+    try {
+      optionGroups = parseOptionGroups(formData);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "옵션 JSON 오류", menuName: name },
+        { status: 400 },
+      );
+    }
+    // Validate before replacing menus or deleting any existing options.
+    for (const group of optionGroups) {
+      if (group.maxSelect !== null && group.maxSelect < group.minSelect) {
+        return NextResponse.json(
+          { error: `옵션 선택 범위 오류 (${group.name}): 최소 ${group.minSelect}, 최대 ${group.maxSelect}`, menuName: name },
+          { status: 400 },
+        );
+      }
+    }
 
     const thumbnailValue = formData.get("thumbnail");
     const displayImageValue = formData.get("displayImage");
@@ -1698,12 +1718,16 @@ export async function POST(
   } catch (error) {
     console.error("Menu import failed:", error);
 
+    // Supabase errors can be plain objects rather than Error instances.
+    const detail = error && typeof error === "object"
+      ? error as { message?: unknown; code?: unknown }
+      : null;
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Menu import failed",
+        error: error instanceof Error ? error.message
+          : typeof detail?.message === "string" ? detail.message : "Menu import failed",
+        menuName: requestedMenuName,
+        code: typeof detail?.code === "string" ? detail.code : undefined,
       },
       { status: 500 },
     );
