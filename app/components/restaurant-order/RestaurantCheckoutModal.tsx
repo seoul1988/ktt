@@ -270,12 +270,6 @@ export default function RestaurantCheckoutModal({
   const [postalCode, setPostalCode] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
   const [orderNote, setOrderNote] = useState("");
-  const [pickupTime, setPickupTime] = useState("asap");
-  const [customTime, setCustomTime] = useState("");
-  const [customDate, setCustomDate] = useState("");
-  const [customHour, setCustomHour] = useState("12");
-  const [customMinute, setCustomMinute] = useState("00");
-  const [customPeriod, setCustomPeriod] = useState<"AM" | "PM">("PM");
   const [tipPercent, setTipPercent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1099,18 +1093,6 @@ export default function RestaurantCheckoutModal({
         return setError("Please calculate the delivery fee before paying.");
       }
     }
-    if (pickupTime === "custom" && !customDate) {
-      orderSubmitLockRef.current = false;
-      return setError("Please select a date.");
-    }
-    if (pickupTime === "custom") {
-      let hour = Number(customHour);
-      if (customPeriod === "AM" && hour === 12) hour = 0;
-      if (customPeriod === "PM" && hour !== 12) hour += 12;
-      const nextCustomTime = `${customDate}T${String(hour).padStart(2, "0")}:${customMinute}`;
-      setCustomTime(nextCustomTime);
-    }
-
     setSubmitting(true);
     try {
       window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim() }));
@@ -1129,14 +1111,6 @@ export default function RestaurantCheckoutModal({
             postalCode: submitPostalCode,
             note: deliveryNote.trim(),
           } : null,
-          requestedTime: pickupTime === "custom"
-            ? (() => {
-                let hour = Number(customHour);
-                if (customPeriod === "AM" && hour === 12) hour = 0;
-                if (customPeriod === "PM" && hour !== 12) hour += 12;
-                return `${customDate}T${String(hour).padStart(2, "0")}:${customMinute}`;
-              })()
-            : pickupTime,
           tipPercent,
           promoCode: promoCodeApplied ? appliedPromoCode : null,
           deliveryQuoteId:
@@ -1624,46 +1598,6 @@ export default function RestaurantCheckoutModal({
                 </div>
               ) : null}
             </section> : null}
-
-            <section className="rounded-2xl border p-4">
-              <h3 className="font-black">{fulfillmentType === "delivery" ? "Delivery Time" : "Pickup Time"}</h3>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["asap", "15", "30", "45", "60", "custom"].map((v) => <button key={v} type="button" onClick={() => setPickupTime(v)} className={`rounded-full border px-3 py-2 text-xs font-black ${pickupTime === v ? "bg-gray-950 text-white" : "bg-white"}`}>{v === "asap" ? "ASAP" : v === "custom" ? "Select Time" : `${v} min`}</button>)}
-              </div>
-              {pickupTime === "custom" ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr]">
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-black uppercase text-gray-500">Select Date</span>
-                    <input
-                      type="date"
-                      lang="en-US"
-                      value={customDate}
-                      onChange={(e) => setCustomDate(e.target.value)}
-                      className="w-full rounded-xl border px-3 py-3 text-sm"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-black uppercase text-gray-500">Hour</span>
-                    <select value={customHour} onChange={(e) => setCustomHour(e.target.value)} className="w-full rounded-xl border bg-white px-3 py-3 text-sm">
-                      {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((h) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-black uppercase text-gray-500">Minute</span>
-                    <select value={customMinute} onChange={(e) => setCustomMinute(e.target.value)} className="w-full rounded-xl border bg-white px-3 py-3 text-sm">
-                      {["00", "15", "30", "45"].map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-black uppercase text-gray-500">AM / PM</span>
-                    <select value={customPeriod} onChange={(e) => setCustomPeriod(e.target.value as "AM" | "PM")} className="w-full rounded-xl border bg-white px-3 py-3 text-sm">
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                  </label>
-                </div>
-              ) : null}
-            </section>
 
             {promoCodeVisible && promoCodeSettings ? (
               <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
