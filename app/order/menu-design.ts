@@ -44,6 +44,8 @@ export function resolveOrderDesign(sections: unknown, settings: unknown) {
     headerBackgroundColor: text(website.header_background_color) || "#ffffff",
     widthClass: width === "full" ? "max-w-none" : width === "wide" ? "max-w-[1400px]" : "max-w-[1120px]",
     menuProps: {
+      menuStyle: source.restaurant_menu_style === "pills" ? "pills" as const : "tabs" as const,
+      categoryUnderlineColor: text(source.restaurant_menu_category_underline_color),
       backgroundColor,
       textColor: text(source.restaurant_menu_text_color) || "#111827",
       cardBackgroundColor: text(source.restaurant_menu_card_background_color),

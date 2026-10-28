@@ -63,6 +63,8 @@ function withServicePrice(
 }
 
 type Props = {
+  menuStyle?: "tabs" | "pills";
+  categoryUnderlineColor?: string;
   businessId: number;
   changeLocationHref?: string;
   compact?: boolean;
@@ -211,6 +213,8 @@ function getMenuClickVisitorId() {
 }
 
 export default function RestaurantMenu({
+  menuStyle = "tabs",
+  categoryUnderlineColor,
   businessId,
   changeLocationHref,
   compact = false,
@@ -948,15 +952,11 @@ export default function RestaurantMenu({
 
       setShowScrollTop(currentScroll >= 1500);
 
+      const mobileLayout = compact || window.matchMedia("(max-width: 639px)").matches;
       setScrollTopButtonStyle({
-        // 모바일 하단 ORDER/CART 영역과 충분히 떨어뜨립니다.
-        // 데스크톱 자체 Cart 버튼이 있으면 그 위에 표시합니다.
-        bottom: compact
-          ? 148
-          : orderingAvailable && !externalCartButton
-            ? 100
-            : 28,
-        right: compact ? 16 : 28,
+        bottom: mobileLayout ? "35vh" : orderingAvailable && !externalCartButton ? 100 : 28,
+        right: mobileLayout ? 6 : 28,
+        ...(mobileLayout ? { width: 44, height: 44 } : {}),
       });
     }
 
@@ -1318,6 +1318,7 @@ export default function RestaurantMenu({
     return (
       <div
         data-category-text-bar
+        data-menu-style={menuStyle}
         data-mobile-preview={compact ? "true" : undefined}
         ref={categoryBarMeasureRef}
         className={`${
@@ -1330,6 +1331,7 @@ export default function RestaurantMenu({
             : "border-black/10"
         }`}
         style={{
+          ...({ "--category-underline": categoryUnderlineColor || "#ef3340" } as CSSProperties),
           backgroundColor: categoryBarBackgroundColor || (isBunsMenu
             ? "rgba(11,11,11,0.96)"
             : backgroundColor),
@@ -1433,6 +1435,7 @@ export default function RestaurantMenu({
     <div
       ref={rootRef}
       data-compact-order-menu
+      data-menu-style={menuStyle}
       data-mobile-preview={compact ? "true" : undefined}
       className="relative w-full"
       style={{
@@ -1442,30 +1445,30 @@ export default function RestaurantMenu({
     >
       <style>{`
 
-          [data-compact-order-menu] [data-service-options] { gap: 0; }
-          [data-compact-order-menu] [data-service-choice] {
+          [data-compact-order-menu][data-menu-style="tabs"] [data-service-options] { gap: 0; }
+          [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice] {
             min-height: 32px; padding: 5px 16px; font-size: 11px;
             border: 0; border-radius: 0; box-shadow: none;
             background: #252525;
           }
-          [data-compact-order-menu] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
-          [data-compact-order-menu] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
-          [data-compact-order-menu] [data-service-choice][aria-pressed="true"] {
+          [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
+          [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
+          [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice][aria-pressed="true"] {
             border-radius: 999px; background: #f5f5f5;
           }
-          [data-category-text-bar] { box-shadow: none; border: 0; }
-          [data-category-track] { display: block; }
-          [data-category-scroll-arrow] { display: none; }
-          [data-category-text-tab] {
+          [data-category-text-bar][data-menu-style="tabs"] { box-shadow: none; border: 0; }
+          [data-category-text-bar][data-menu-style="tabs"] [data-category-track] { display: block; }
+          [data-category-text-bar][data-menu-style="tabs"] [data-category-scroll-arrow] { display: none; }
+          [data-category-text-bar][data-menu-style="tabs"] [data-category-text-tab] {
             border: 0 !important; border-bottom: 2px solid transparent !important;
             border-radius: 0; background: transparent !important;
             opacity: 1; box-shadow: none;
             padding: 10px 8px; font-size: 12px; text-transform: none;
           }
-          [data-category-text-tab][aria-current="true"] {
-            border-bottom-color: #ef3340 !important; opacity: 1;
+          [data-category-text-bar][data-menu-style="tabs"] [data-category-text-tab][aria-current="true"] {
+            border-bottom-color: var(--category-underline, #ef3340) !important; opacity: 1;
           }
-          [data-compact-order-menu] [data-category-section-heading] {
+          [data-compact-order-menu][data-menu-style="tabs"] [data-category-section-heading] {
             background: transparent !important; padding: 0; font-size: 24px;
           }
       `}</style>

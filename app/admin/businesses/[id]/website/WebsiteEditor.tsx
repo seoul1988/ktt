@@ -183,6 +183,8 @@ type GridCell = {
   restaurant_menu_menu_enabled?: boolean;
   restaurant_menu_pickup_enabled?: boolean;
   restaurant_menu_delivery_enabled?: boolean;
+  restaurant_menu_style?: "tabs" | "pills";
+  restaurant_menu_category_underline_color?: string;
   /** 메뉴 카드 색상 설정 */
   restaurant_menu_card_background_color?: string;
   restaurant_menu_card_border_color?: string;
@@ -16913,18 +16915,18 @@ export function PublicWebsiteRenderer({
                         if (window.history.length > 1) window.history.back();
                         else window.location.assign(`/business/${business.id}/website`);
                       }}
-                      className="flex min-h-[56px] flex-col items-center justify-center rounded-xl text-gray-950 active:bg-gray-100">
+                      className="flex min-h-[44px] flex-col items-center justify-center rounded-xl text-gray-950 active:bg-gray-100">
                       <span aria-hidden="true" className="text-2xl">←</span>
                       <span className="text-[10px] font-bold">BACK</span>
                     </button>
                     <button type="button" onClick={openMobileHoursTarget} aria-label="Open business hours"
-                      className="flex min-h-[56px] min-w-0 flex-col items-center justify-center rounded-xl px-1 text-gray-950 active:bg-gray-100">
+                      className="flex min-h-[44px] min-w-0 flex-col items-center justify-center rounded-xl px-1 text-gray-950 active:bg-gray-100">
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${mobileHoursToneClass}`}>{mobileHoursStatus.label}</span>
                       <span className="mt-1 text-[10px] font-black">BUSINESS HOURS</span>
                       <span className="w-full truncate text-center text-[9px] text-gray-500">{mobileHoursStatus.detail}</span>
                     </button>
                     <button type="button" onClick={openMobileActionTarget} aria-label={`Open cart, ${mobileCartCount} items`}
-                      className="flex min-h-[56px] flex-col items-center justify-center rounded-xl bg-gray-950 px-2 text-white active:bg-gray-800">
+                      className="flex min-h-[44px] flex-col items-center justify-center rounded-xl bg-gray-950 px-2 text-white active:bg-gray-800">
                       <span className="text-[17px]" aria-hidden="true">🛒 <span className="text-xs font-black">{mobileCartCount}</span></span>
                       <span className="mt-1 text-[10px] font-black">VIEW CART</span>
                     </button>
@@ -16937,7 +16939,7 @@ export function PublicWebsiteRenderer({
                       type="button"
                       onClick={openMobileHoursTarget}
                       aria-label="Open business hours"
-                      className="flex min-h-[52px] min-w-0 items-center justify-start gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                      className="flex min-h-[44px] min-w-0 items-center justify-start gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
                     >
                       <span
                         aria-hidden="true"
@@ -16962,7 +16964,7 @@ export function PublicWebsiteRenderer({
                       type="button"
                       onClick={() => window.location.assign(customerTrackingUrl)}
                       aria-label="배송조회"
-                      className="ml-auto flex min-h-[56px] shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-white shadow-md transition active:scale-[0.98] active:bg-blue-700"
+                      className="ml-auto flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-white shadow-md transition active:scale-[0.98] active:bg-blue-700"
                     >
                       <span aria-hidden="true" className="text-[20px] leading-none">
                         🚚
@@ -16984,7 +16986,7 @@ export function PublicWebsiteRenderer({
                       onClick={openMobileActionTarget}
                       disabled={mobileMenuCallActive && !mobileMenuCallNumber}
                       aria-label={mobileActionDisplayLabel}
-                      className={`ml-auto flex min-h-[56px] shrink-0 items-center justify-end gap-2 rounded-xl px-4 py-2 transition active:scale-[0.98] ${
+                      className={`ml-auto flex min-h-[44px] shrink-0 items-center justify-end gap-2 rounded-xl px-4 py-2 transition active:scale-[0.98] ${
                           mobileMenuCartActive
                             ? "bg-gray-950 text-white shadow-md active:bg-gray-800"
                             : "bg-gray-900 text-white shadow-md ring-1 ring-white/10 active:bg-gray-800"
@@ -22008,6 +22010,8 @@ function CellPreview({
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
+            menuStyle={cell.restaurant_menu_style || "tabs"}
+            categoryUnderlineColor={cell.restaurant_menu_category_underline_color}
             cardBackgroundColor={cell.restaurant_menu_card_background_color}
             cardBorderColor={cell.restaurant_menu_card_border_color}
             nameColor={cell.restaurant_menu_name_color}
@@ -37739,7 +37743,16 @@ function TitleCellEditor({
           </div>
 
           <div className="mt-4 rounded-xl border border-orange-200 bg-white p-3">
-            <p className="mb-3 text-sm font-black text-gray-900">메뉴 카드 색상 설정</p>
+            <p className="mb-3 text-sm font-black text-gray-900">메뉴 스타일·색상 설정</p>
+            <label className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-700">
+              <span className="min-w-[86px]">메뉴 스타일</span>
+              <select value={cell.restaurant_menu_style || "tabs"}
+                onChange={(event) => onUpdate({ restaurant_menu_style: event.target.value === "pills" ? "pills" : "tabs" })}
+                className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-2 text-gray-950">
+                <option value="tabs">간결한 밑줄 탭</option>
+                <option value="pills">둥근 버튼</option>
+              </select>
+            </label>
             {([
               ["restaurant_menu_card_background_color", "카드 배경색", "#ffffff"],
               ["restaurant_menu_card_border_color", "카드 테두리", "#e5e7eb"],
@@ -37752,6 +37765,7 @@ function TitleCellEditor({
               ["restaurant_menu_category_bar_background_color", "카테고리 줄 전체 배경", "#ffffff"],
               ["restaurant_menu_category_pill_background_color", "상단 카테고리 라운드 배경", "#111827"],
               ["restaurant_menu_category_pill_text_color", "상단 카테고리 글자", "#ffffff"],
+              ["restaurant_menu_category_underline_color", "선택 탭 밑줄", "#ef3340"],
               ["restaurant_menu_category_heading_color", "아래 카테고리 제목", "#111827"],
               ["restaurant_menu_area_background_color", "메뉴 전체 셀 배경", "#ffffff"],
             ] as const).map(([key, label, fallback]) => (
@@ -40795,16 +40809,16 @@ export function SavedOrderMobileBottom({ business, sections, preview = false }: 
           if (preview) return;
           if (window.history.length > 1) window.history.back();
           else window.location.assign("/order");
-        }} className="flex min-h-[56px] flex-col items-center justify-center rounded-xl active:bg-gray-100">
+        }} className="flex min-h-[44px] flex-col items-center justify-center rounded-xl active:bg-gray-100">
           <span className="text-2xl" aria-hidden="true">←</span><span className="text-[10px] font-bold">BACK</span>
         </button>
-        <button type="button" onClick={() => setHoursOpen(true)} className="flex min-h-[56px] min-w-0 flex-col items-center justify-center rounded-xl px-1 active:bg-gray-100">
+        <button type="button" onClick={() => setHoursOpen(true)} className="flex min-h-[44px] min-w-0 flex-col items-center justify-center rounded-xl px-1 active:bg-gray-100">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${status.tone === "open" ? "bg-emerald-500 text-white" : "bg-gray-900 text-white"}`}>{status.label}</span>
           <span className="mt-1 text-[10px] font-black">BUSINESS HOURS</span>
           <span className="w-full truncate text-center text-[9px] text-gray-500">{status.detail}</span>
         </button>
         <button type="button" aria-label={`Open cart, ${count} items`} onClick={() => window.dispatchEvent(new CustomEvent("restaurant-order-open-cart", { detail: { businessId: business.id, handled: false } }))}
-          className="flex min-h-[56px] flex-col items-center justify-center rounded-xl bg-gray-950 px-2 text-white active:bg-gray-800">
+          className="flex min-h-[44px] flex-col items-center justify-center rounded-xl bg-gray-950 px-2 text-white active:bg-gray-800">
           <span aria-hidden="true" className="text-lg">🛒 <span className="text-xs font-black">{count}</span></span><span className="mt-1 text-[10px] font-black">VIEW CART</span>
         </button>
       </div>
