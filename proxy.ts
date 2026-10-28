@@ -10,7 +10,6 @@ function normalizeHost(value: string | null) {
     .trim()
     .toLowerCase()
     .split(":")[0]
-    .replace(/^www\./, "")
     .replace(/\.$/, "");
 }
 
@@ -19,6 +18,8 @@ function shouldIgnorePath(pathname: string) {
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/orders/track/") ||
+    pathname.startsWith("/restaurant-order/") ||
+    pathname.startsWith("/c/") ||
     pathname.startsWith("/.well-known/") ||
     pathname.startsWith("/admin/") ||
     pathname.startsWith("/business/") ||
@@ -73,6 +74,24 @@ async function findBusinessIdByDomain(domain: string) {
   return rows[0]?.id ?? null;
 }
 
+async function findOrderBusinessByDomain(domain: string) {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base || !key) return null;
+  const url = new URL(`${base}/rest/v1/restaurant_order_domains`);
+  url.searchParams.set("select", "business_id,brand_code");
+  url.searchParams.set("hostname", `eq.${domain}`);
+  url.searchParams.set("status", "eq.verified");
+  url.searchParams.set("enabled", "eq.true");
+  url.searchParams.set("limit", "1");
+  try {
+    const response = await fetch(url, {headers:{apikey:key,Authorization:`Bearer ${key}`},cache:"no-store",signal:AbortSignal.timeout(5000)});
+    if (!response.ok) return null;
+    const rows = await response.json() as Array<{business_id:number|null;brand_code?:string|null}>;
+    return rows[0] || null;
+  } catch { return null; }
+}
+
 export async function proxy(request: NextRequest) {
   const rawHost =
     request.headers.get("x-forwarded-host") ??
@@ -102,7 +121,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const businessId = await findBusinessIdByDomain(host);
+  const orderTarget = await findOrderBusinessByDomain(host);
+  if (orderTarget) {
+    if (["/", "/order", "/order/", "/menu", "/menu/"].includes(pathname)) {
+      const orderUrl = request.nextUrl.clone();
+      if (orderTarget.brand_code) {
+        orderUrl.pathname = "/order";
+        orderUrl.searchParams.set("brandId", orderTarget.brand_code);
+      } else if (orderTarget.business_id) {
+        orderUrl.pathname = `/restaurant-order/${orderTarget.business_id}`;
+      } else return NextResponse.next();
+      return NextResponse.rewrite(orderUrl);
+    }
+    // Keep the order host in the address bar; never send its paths to a website renderer.
+    return NextResponse.next();
+  }
+  const businessId = await findBusinessIdByDomain(host.replace(/^www\./, ""));
 
   if (!businessId) {
     return NextResponse.next();

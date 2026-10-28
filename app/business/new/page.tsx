@@ -1,5 +1,8 @@
 "use client";
 
+import BrandCodeField from "@/app/components/restaurant-brand/BrandCodeField";
+import { normalizeBrandCode } from "@/lib/restaurant-brand/brand";
+
 import { useEffect, useRef, useState } from "react";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../lib/supabase";
@@ -591,6 +594,7 @@ export default function NewBusinessPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const [name, setName] = useState("");
+  const [brandCode, setBrandCode] = useState("");
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
@@ -1625,6 +1629,10 @@ export default function NewBusinessPage() {
   async function saveBusiness() {
     if (!userId) return;
 
+    let savedBrandCode: string;
+    try { savedBrandCode = normalizeBrandCode(brandCode); }
+    catch (error) { alert(error instanceof Error ? error.message : "브랜드 코드를 확인하세요."); return; }
+
     if (!name.trim()) {
       alert("Please enter business name.");
       return;
@@ -1717,6 +1725,7 @@ export default function NewBusinessPage() {
       .from("businesses")
       .insert({
         name,
+        brand_code: savedBrandCode || null,
         address: address.trim() || null,
         phone,
 		owner_phone: ownerPhone,
@@ -1881,6 +1890,8 @@ export default function NewBusinessPage() {
             placeholder="Business name"
             className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
           />
+
+          <BrandCodeField value={brandCode} onChange={setBrandCode} />
 
           {isLoaded ? (
             <Autocomplete

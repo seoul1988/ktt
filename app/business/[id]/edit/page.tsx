@@ -1,5 +1,8 @@
 "use client";
 
+import BrandCodeField from "@/app/components/restaurant-brand/BrandCodeField";
+import { normalizeBrandCode } from "@/lib/restaurant-brand/brand";
+
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -78,6 +81,7 @@ type WebsiteMenuItem = {
 };
 
 type Business = {
+  brand_code?: string | null;
   id: number;
   name: string;
   address: string | null;
@@ -701,6 +705,7 @@ export default function EditBusinessPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const [name, setName] = useState("");
+  const [brandCode, setBrandCode] = useState("");
   const [address, setAddress] = useState("");
   const [selectedLat, setSelectedLat] = useState<number | null>(null);
   const [selectedLng, setSelectedLng] = useState<number | null>(null);
@@ -831,6 +836,7 @@ const menuPriceInputRefs =
 
     setBusiness(b);
     setName(b.name || "");
+    setBrandCode(b.brand_code || "");
     setAddress(b.address || "");
     setPhone(b.phone || "");
     setOwnerPhone(b.owner_phone || "");
@@ -2036,6 +2042,10 @@ const menuPriceInputRefs =
   async function saveBusiness() {
     if (!business) return;
 
+    let savedBrandCode: string;
+    try { savedBrandCode = normalizeBrandCode(brandCode); }
+    catch (error) { alert(error instanceof Error ? error.message : "브랜드 코드를 확인하세요."); return; }
+
     if (!name.trim()) {
       alert("Please enter business name.");
       return;
@@ -2120,6 +2130,7 @@ const menuPriceInputRefs =
 
     const updatePayload: Record<string, any> = {
       name,
+      brand_code: savedBrandCode || null,
       address,
       phone,
       owner_phone: ownerPhone.trim() || null,
@@ -2296,6 +2307,8 @@ const menuPriceInputRefs =
               placeholder="Business name"
               className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
             />
+
+          <BrandCodeField value={brandCode} onChange={setBrandCode} />
 
             <div className="relative">
               {isLoaded ? (

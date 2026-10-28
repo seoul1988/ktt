@@ -537,6 +537,12 @@ export default async function BusinessPage({
             </div>
           </div>
 
+          {spot.brand_code && (
+            <a href={`/order?brandId=${encodeURIComponent(spot.brand_code)}`} className="mt-5 flex items-center justify-center rounded-2xl bg-[#b64032] px-5 py-4 text-sm font-black text-white">
+              Online Order · Choose Location
+            </a>
+          )}
+
           <hr className="my-5 border-gray-200" />
 
           <div className="space-y-2 text-[15px] leading-5">

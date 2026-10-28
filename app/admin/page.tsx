@@ -215,6 +215,11 @@ export default function AdminPage() {
             </span>
           </Link>
 
+          <Link href="/admin/order-domains" className={menuClass}>
+            <span className={iconClass}>🌐</span>
+            <span className={labelClass}>식당 주문 도메인 관리</span>
+          </Link>
+
           {/* AD MANAGEMENT */}
           <Link
             href="/admin/community/ads/magazines"
