@@ -64,6 +64,7 @@ function withServicePrice(
 
 type Props = {
   businessId: number;
+  changeLocationHref?: string;
   compact?: boolean;
   backgroundColor?: string;
   textColor?: string;
@@ -209,6 +210,7 @@ function getMenuClickVisitorId() {
 
 export default function RestaurantMenu({
   businessId,
+  changeLocationHref,
   compact = false,
   backgroundColor = "#ffffff",
   textColor = "#111827",
@@ -1439,7 +1441,8 @@ export default function RestaurantMenu({
             backgroundColor: serviceBarBackgroundColor || (isBunsMenu ? "#0b0b0b" : "transparent"),
           }}
         >
-          <div className="flex gap-2 overflow-x-auto">
+          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
             {resolvedMenuEnabled && !orderingAvailable ? (
               <button
                 type="button"
@@ -1517,6 +1520,13 @@ export default function RestaurantMenu({
                 TRACKING
               </a>
             ) : null}
+          </div>
+          {changeLocationHref ? (
+            <a href={changeLocationHref}
+              className="ml-auto shrink-0 whitespace-nowrap rounded bg-white px-2 py-2 text-[11px] font-bold text-blue-800 sm:px-3 sm:text-sm">
+              ← Change location
+            </a>
+          ) : null}
           </div>
         </div>
       ) : null}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SavedOrderWebsiteHeader } from "@/app/admin/businesses/[id]/website/WebsiteEditor";
 import { notFound } from "next/navigation";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
@@ -30,13 +29,8 @@ async function SelectedStoreMenu({ id, name, address, changeLocation }: {
         id, name, address, phone: businessResult.data?.phone,
         website_settings: businessResult.data?.website_settings,
       }} />
-      {changeLocation && (
-        <nav aria-label="Restaurant location" className={`mx-auto w-full px-4 py-2 ${design.widthClass}`}>
-          <Link href={changeLocation} className="inline-block rounded bg-white px-3 py-1 text-sm font-bold text-blue-800">← Change location</Link>
-        </nav>
-      )}
       <div className={`mx-auto w-full ${design.widthClass}`}>
-        <RestaurantMenu key={id} businessId={id} {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
+        <RestaurantMenu key={id} businessId={id} changeLocationHref={changeLocation} {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
       </div>
     </main>
   );
