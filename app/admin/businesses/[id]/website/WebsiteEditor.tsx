@@ -1899,6 +1899,10 @@ function loadWebsiteDraft(businessId: string): LocalWebsiteDraft | null {
 
     const parsed = JSON.parse(raw) as Partial<LocalWebsiteDraft>;
     if (!parsed.business || !Array.isArray(parsed.sections)) return null;
+    if (Number(parsed.business.id) !== Number(businessId)) return null;
+    if (parsed.sections.some((section) =>
+      section.business_id != null && Number(section.business_id) !== Number(businessId)
+    )) return null;
 
     return {
       business: parsed.business as Business,
@@ -1919,6 +1923,8 @@ function saveWebsiteDraft(
   sections: BusinessSection[],
 ) {
   if (typeof window === "undefined") return "";
+  if (Number(business.id) !== Number(businessId)) return "";
+  if (sections.some((section) => section.business_id != null && Number(section.business_id) !== Number(businessId))) return "";
 
   const savedAt = new Date().toISOString();
   const draft: LocalWebsiteDraft = {
@@ -7432,6 +7438,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [newLinkPageName, setNewLinkPageName] = useState("");
   const [newLinkPageKind, setNewLinkPageKind] = useState<"blank" | "restaurant-menu" | "pdf-menu">("blank");
   const draftReadyRef = useRef(false);
+  const preservedLocalDraftRef = useRef<LocalWebsiteDraft | null>(null);
+  const [localDraftAvailable, setLocalDraftAvailable] = useState(false);
   const suppressNextAutoSaveRef = useRef(false);
 
   /*
@@ -7950,6 +7958,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       options?: {
         ignoreLocalDraft?: boolean;
         recoveryMode?: boolean;
+        restoreLocalDraft?: boolean;
       },
     ) => {
       if (options?.recoveryMode) {
@@ -8030,7 +8039,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             );
 
         const localDraft = loadWebsiteDraft(businessId);
-        const useServerData = options?.ignoreLocalDraft === true;
+        const useServerData = options?.restoreLocalDraft !== true || options?.ignoreLocalDraft === true;
+        preservedLocalDraftRef.current = localDraft;
+        setLocalDraftAvailable(Boolean(localDraft) && useServerData);
 
         draftReadyRef.current = false;
         suppressNextAutoSaveRef.current = true;
@@ -8041,12 +8052,13 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             localDraft,
             "서버 저장 데이터 복구 전 자동 백업",
           );
-          window.localStorage.removeItem(getWebsiteDraftKey(businessId));
-
+          // Preserve the browser draft; opening the editor must not erase pending work.
           setBusiness(normalizedBusiness);
           setSections(normalizedSections);
           setDraftMessage(
-            "서버에 저장된 사이트 데이터를 복구했습니다. 내용을 확인한 뒤 서버 저장을 눌러주세요.",
+            localDraft
+              ? "이 가게의 서버 저장 디자인을 불러왔습니다. 이전 브라우저 임시저장은 별도로 보관되어 있습니다."
+              : "이 가게의 서버 저장 디자인을 불러왔습니다.",
           );
           setLastDraftSavedAt("");
         } else if (localDraft) {
@@ -8141,6 +8153,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
   useEffect(() => {
     if (!draftReadyRef.current || !business || !adminKey) return;
+    if (Number(business.id) !== Number(businessId)) return;
 
     if (suppressNextAutoSaveRef.current) {
       suppressNextAutoSaveRef.current = false;
@@ -8164,6 +8177,21 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
     return () => window.clearTimeout(timer);
   }, [adminKey, business, businessId, sections]);
+
+  function restorePreservedLocalDraft() {
+    const draft = preservedLocalDraftRef.current;
+    if (!draft || Number(draft.business.id) !== Number(businessId)) return;
+    if (business && Number(business.id) === Number(businessId)) {
+      backupWebsiteDraft(businessId, { business, sections, savedAt: new Date().toISOString() }, "이전 브라우저 임시저장 불러오기 전 백업");
+    }
+    suppressNextAutoSaveRef.current = true;
+    setBusiness(draft.business);
+    setSections(draft.sections);
+    setSelection({ area: "header" });
+    setLastDraftSavedAt(draft.savedAt);
+    setDraftMessage("이전 브라우저 임시저장을 불러왔습니다. 공개 사이트에는 아직 반영되지 않았습니다.");
+    setLocalDraftAvailable(false);
+  }
 
   function saveDraftNow() {
     if (!business) return;
@@ -12260,6 +12288,12 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-bold text-amber-900">
           {draftMessage ||
             `중간 저장됨 · ${formatDraftTime(lastDraftSavedAt)}`}
+          {localDraftAvailable ? (
+            <button type="button" disabled={loading || saving} onClick={restorePreservedLocalDraft}
+              className="ml-3 rounded border border-amber-400 bg-white px-2 py-1 font-bold disabled:opacity-50">
+              이전 브라우저 임시저장 불러오기
+            </button>
+          ) : null}
         </div>
       ) : null}
 
