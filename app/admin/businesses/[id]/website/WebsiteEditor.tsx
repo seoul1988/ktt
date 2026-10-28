@@ -40680,3 +40680,32 @@ function ColorInput({ label, value, onChange }: { label: string; value: string; 
 function ActionButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {
   return <button type="button" onClick={onClick} className={`rounded-xl px-3 py-2.5 text-sm font-black ${danger ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-800"}`}>{label}</button>;
 }
+
+
+// Reuse the saved website header on the standalone ordering page.
+export function SavedOrderWebsiteHeader({ business }: { business: Business }) {
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const update = () => setDevice(media.matches ? "mobile" : "desktop");
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const settings = normalizeSettings(business.website_settings, business.name || "");
+  const headerGrid = normalizeGrid(settings.header_grid, createDefaultHeader(business.name || ""));
+  if (settings.header_hidden === true) return null;
+  return (
+    <header className="relative z-[100] w-full overflow-visible" style={{
+      ...getHeaderLayerWidthStyle(settings),
+      backgroundColor: String(settings.header_background_color || "#ffffff"),
+    }}>
+      <div className="mx-auto w-full max-w-[1120px]">
+        <ReadOnlyGrid area="header" grid={headerGrid} business={business}
+          accentColor={String(settings.accent_color || "#d97706")}
+          previewDevice={device} websiteSettings={settings} />
+        <HeaderSubmenu websiteSettings={settings} businessId={business.id} previewDevice={device} />
+      </div>
+    </header>
+  );
+}

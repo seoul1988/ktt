@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SavedOrderWebsiteHeader } from "@/app/admin/businesses/[id]/website/WebsiteEditor";
 import { notFound } from "next/navigation";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
 import StoreSelector from "@/app/components/restaurant-brand/StoreSelector";
@@ -13,7 +14,7 @@ async function SelectedStoreMenu({ id, name, address, changeLocation }: {
   id: number; name: string; address?: string | null; changeLocation?: string;
 }) {
   const [businessResult, sectionsResult] = await Promise.all([
-    supabaseAdmin.from("businesses").select("website_settings").eq("id", id).maybeSingle(),
+    supabaseAdmin.from("businesses").select("id,name,address,phone,website_settings").eq("id", id).maybeSingle(),
     supabaseAdmin.from("business_sections")
       .select("id,content,is_visible,sort_order")
       .eq("business_id", id).order("sort_order", { ascending: true }).order("id", { ascending: true }),
@@ -25,13 +26,15 @@ async function SelectedStoreMenu({ id, name, address, changeLocation }: {
   const design = resolveOrderDesign(sectionsResult.data, businessResult.data?.website_settings);
   return (
     <main className="min-h-screen" style={{ backgroundColor: design.outerBackgroundColor }}>
-      <header className="border-b px-5 py-5" style={{ backgroundColor: design.headerBackgroundColor }}>
-        <div className="mx-auto max-w-6xl rounded-xl bg-white px-4 py-3 text-gray-950">
-          <h1 className="text-2xl font-black">{name}</h1>
-          {address && <p className="mt-1 text-sm text-slate-600">{address}</p>}
-          {changeLocation && <Link href={changeLocation} className="mt-3 inline-block text-sm font-bold text-blue-800">← Change location</Link>}
-        </div>
-      </header>
+      <SavedOrderWebsiteHeader business={{
+        id, name, address, phone: businessResult.data?.phone,
+        website_settings: businessResult.data?.website_settings,
+      }} />
+      {changeLocation && (
+        <nav aria-label="Restaurant location" className={`mx-auto w-full px-4 py-2 ${design.widthClass}`}>
+          <Link href={changeLocation} className="inline-block rounded bg-white px-3 py-1 text-sm font-bold text-blue-800">← Change location</Link>
+        </nav>
+      )}
       <div className={`mx-auto w-full ${design.widthClass}`}>
         <RestaurantMenu key={id} businessId={id} {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
       </div>
