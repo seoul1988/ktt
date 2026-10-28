@@ -30,7 +30,7 @@ async function SelectedStoreMenu({ id, name, address, changeLocation }: {
         website_settings: businessResult.data?.website_settings,
       }} />
       <div className={`mx-auto w-full ${design.widthClass}`}>
-        <RestaurantMenu key={id} businessId={id} changeLocationHref={changeLocation} externalCartButton {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
+        <RestaurantMenu key={id} businessId={id} changeLocationHref={changeLocation} {...design.menuProps} orderEnabled menuEnabled pickupEnabled deliveryEnabled />
       </div>
       <SavedOrderMobileBottom business={{ id, name, address, hours: businessResult.data?.hours, website_settings: businessResult.data?.website_settings }} sections={sectionsResult.data || []} />
     </main>
