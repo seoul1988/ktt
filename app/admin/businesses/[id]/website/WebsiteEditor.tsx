@@ -7652,10 +7652,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   }, [selection, headerGrid, heroLayouts, sections]);
 
   useEffect(() => {
+    // Template selection and cell editing must never cover each other.
+    if (templatePickerOpen) {
+      setCellEditModalOpen(false);
+      setCellEditPanelCollapsed(false);
+      return;
+    }
     if (selection.cellId && selectedCell) {
       setCellEditModalOpen(true);
     }
-  }, [selection.cellId, selection.layoutId, selection.area, selectedCell?.id]);
+  }, [templatePickerOpen, selection.cellId, selection.layoutId, selection.area, selectedCell?.id]);
 
   const selectedSection = useMemo(
     () =>
@@ -11087,16 +11093,19 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
   return (
     <main className="min-h-screen bg-[#eef1f5]">
-      {templatePickerOpen && (
-        <>
-          <RestaurantTemplatePicker businessId={businessId} onApply={applyRestaurantTemplate} onClose={() => setTemplatePickerOpen(false)} />
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2" style={{ zIndex: 2147483647 }}>
-            <button type="button" onClick={() => setTemplatePickerOpen(false)} className="rounded-full border border-gray-300 bg-white px-6 py-3 text-sm font-black text-gray-900 shadow-xl hover:bg-gray-100">
-              건너뛰고 기존 디자인 편집
-            </button>
-          </div>
-        </>
-      )}
+      {templatePickerOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[110000] isolate">
+              <RestaurantTemplatePicker businessId={businessId} onApply={applyRestaurantTemplate} onClose={() => setTemplatePickerOpen(false)} />
+              <div className="fixed bottom-4 left-1/2 z-[110001] w-max max-w-[calc(100vw-24px)] -translate-x-1/2 sm:bottom-6">
+                <button type="button" onClick={() => setTemplatePickerOpen(false)} className="rounded-full border border-gray-300 bg-white px-6 py-3 text-sm font-black text-gray-900 shadow-xl hover:bg-gray-100">
+                  건너뛰고 기존 디자인 편집
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 lg:px-6">
           <div className="min-w-0">
@@ -11228,7 +11237,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               📝 캐터링 요청폼 넣기
             </button>
-            <button style={{ display: "none" }}
+            <button
               type="button"
               onClick={() => setMobileBottomButtonsOpen(true)}
               className="rounded-full border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-800 hover:bg-indigo-100"
@@ -13002,7 +13011,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           </aside>
         )}
 
-        {selectedCell && cellEditModalOpen && typeof document !== "undefined"
+        {!templatePickerOpen && selectedCell && cellEditModalOpen && typeof document !== "undefined"
           ? createPortal(
               <div className="pointer-events-none fixed inset-0 z-[100000]">
                 <button
