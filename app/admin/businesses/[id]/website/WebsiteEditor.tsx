@@ -16199,6 +16199,17 @@ export function PublicWebsiteRenderer({
    * 영업 상태는 businesses.hours에서 계산하고,
    * 클릭 대상은 Website Settings에 저장한 레이어/페이지 주소를 사용합니다.
    */
+  const mobileOrderMenuActive = pageSections.some((section) =>
+    section.is_visible !== false && (
+      sectionContainsRestaurantMenu(section) ||
+      section.content?.link_page_kind === "restaurant-menu"
+    ),
+  );
+  const orderHoursSection = sections.find((section) =>
+    section.is_visible !== false &&
+    /^(hours|business[- ]?hours|영업시간)$/i.test(String(section.title || "").trim()),
+  );
+
   const mobileHoursTargetUrl = String(
     websiteSettings.mobile_hours_target_url ||
       (hasRestaurantMenu || orderOnlyMode ? "#business-hours" : ""),
@@ -16241,7 +16252,7 @@ export function PublicWebsiteRenderer({
   const mobileMenuCallNumber = String(
     getBusinessContactValue(business, ["phone", "phone_number", "telephone"]) || "",
   ).trim();
-  const mobileMenuCartActive = isMenuPage && mobileCartCount > 0;
+  const mobileMenuCartActive = mobileOrderMenuActive || (isMenuPage && mobileCartCount > 0);
   const mobileMenuCallActive = isMenuPage && !mobileMenuCartActive;
 
   const mobileActionDisplayLabel = isMenuPage
@@ -16269,6 +16280,10 @@ export function PublicWebsiteRenderer({
         : "bg-gray-950 text-white";
 
   function openMobileHoursTarget() {
+    if (mobileOrderMenuActive && orderHoursSection) {
+      setPopupLayerId(orderHoursSection.id);
+      return;
+    }
     const target = mobileHoursTargetUrl.trim();
     if (!target) return;
 
@@ -16852,7 +16867,7 @@ export function PublicWebsiteRenderer({
           : null}
 
         {((device === "mobile" &&
-          (mobileHoursButtonEnabled ||
+          (mobileOrderMenuActive || mobileHoursButtonEnabled ||
             mobileActionButtonEnabled ||
             Boolean(customerTrackingUrl))) ||
           (device === "desktop" && Boolean(customerTrackingUrl))) &&
@@ -16884,6 +16899,31 @@ export function PublicWebsiteRenderer({
                       }
                 }
               >
+                {device === "mobile" && mobileOrderMenuActive ? (
+                  <div className="grid w-full grid-cols-[64px_minmax(0,1fr)_96px] items-center gap-1">
+                    <button type="button" aria-label="뒤로가기"
+                      onClick={() => {
+                        if (window.history.length > 1) window.history.back();
+                        else window.location.assign(`/business/${business.id}/website`);
+                      }}
+                      className="flex min-h-[56px] flex-col items-center justify-center rounded-xl text-gray-950 active:bg-gray-100">
+                      <span aria-hidden="true" className="text-2xl">←</span>
+                      <span className="text-[10px] font-bold">BACK</span>
+                    </button>
+                    <button type="button" onClick={openMobileHoursTarget} aria-label="Open business hours"
+                      className="flex min-h-[56px] min-w-0 flex-col items-center justify-center rounded-xl px-1 text-gray-950 active:bg-gray-100">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${mobileHoursToneClass}`}>{mobileHoursStatus.label}</span>
+                      <span className="mt-1 text-[10px] font-black">BUSINESS HOURS</span>
+                      <span className="w-full truncate text-center text-[9px] text-gray-500">{mobileHoursStatus.detail}</span>
+                    </button>
+                    <button type="button" onClick={openMobileActionTarget} aria-label={`Open cart, ${mobileCartCount} items`}
+                      className="flex min-h-[56px] flex-col items-center justify-center rounded-xl bg-gray-950 px-2 text-white active:bg-gray-800">
+                      <span className="text-[17px]" aria-hidden="true">🛒 <span className="text-xs font-black">{mobileCartCount}</span></span>
+                      <span className="mt-1 text-[10px] font-black">VIEW CART</span>
+                    </button>
+                    {customerTrackingUrl ? <a href={customerTrackingUrl} className="col-span-3 rounded bg-blue-600 py-1 text-center text-[11px] font-bold text-white">배송조회 · TRACK DELIVERY</a> : null}
+                  </div>
+                ) : (
                 <div className="flex w-full items-center justify-between">
                   {device === "mobile" && mobileHoursButtonEnabled ? (
                     <button
@@ -16984,6 +17024,7 @@ export function PublicWebsiteRenderer({
                     </button>
                   ) : null}
                 </div>
+                )}
               </nav>,
               document.body,
             )
