@@ -1313,6 +1313,7 @@ export default function RestaurantMenu({
   function renderCategoryBar(fixed: boolean) {
     return (
       <div
+        data-category-text-bar
         ref={categoryBarMeasureRef}
         className={`${
           fixed
@@ -1336,9 +1337,9 @@ export default function RestaurantMenu({
             : {}),
         }}
       >
-        <div className="mx-auto grid max-w-[840px] grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
+        <div data-category-track className="mx-auto grid max-w-[840px] grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
           {categoryCanScrollLeft ? (
-            <button type="button" aria-label="Previous categories" onClick={() => moveCategoryBar(-1)}
+            <button type="button" data-category-scroll-arrow aria-label="Previous categories" onClick={() => moveCategoryBar(-1)}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">‹</button>
           ) : <span aria-hidden="true" />}
           <div ref={categoryScrollRef} className="min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1356,6 +1357,8 @@ export default function RestaurantMenu({
               <button
                 key={category.id}
                 type="button"
+                data-category-text-tab
+                aria-current={isActive ? "true" : undefined}
                 onClick={() => scrollToCategory(category.id)}
                 className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.02em] transition ${
                   isBunsMenu
@@ -1397,7 +1400,7 @@ export default function RestaurantMenu({
             </div>
           </div>
           {categoryCanScrollRight ? (
-            <button type="button" aria-label="Next categories" onClick={() => moveCategoryBar(1)}
+            <button type="button" data-category-scroll-arrow aria-label="Next categories" onClick={() => moveCategoryBar(1)}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">›</button>
           ) : <span aria-hidden="true" />}
         </div>
@@ -1424,12 +1427,43 @@ export default function RestaurantMenu({
   return (
     <div
       ref={rootRef}
+      data-compact-order-menu
       className="relative w-full"
       style={{
         backgroundColor: "transparent",
         color: textColor,
       }}
     >
+      <style>{`
+        @media (max-width: 639px) {
+          [data-compact-order-menu] [data-service-options] { gap: 0; }
+          [data-compact-order-menu] [data-service-choice] {
+            min-height: 32px; padding: 5px 16px; font-size: 11px;
+            border: 0; border-radius: 0; box-shadow: none;
+            background: #252525; color: #bdbdbd;
+          }
+          [data-compact-order-menu] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
+          [data-compact-order-menu] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
+          [data-compact-order-menu] [data-service-choice][aria-pressed="true"] {
+            border-radius: 999px; background: #f5f5f5; color: #111827;
+          }
+          [data-category-text-bar] { box-shadow: none; border: 0; }
+          [data-category-track] { display: block; }
+          [data-category-scroll-arrow] { display: none; }
+          [data-category-text-tab] {
+            border: 0 !important; border-bottom: 2px solid transparent !important;
+            border-radius: 0; background: transparent !important;
+            color: inherit !important; opacity: .65; box-shadow: none;
+            padding: 10px 8px; font-size: 12px; text-transform: none;
+          }
+          [data-category-text-tab][aria-current="true"] {
+            border-bottom-color: #ef3340 !important; opacity: 1;
+          }
+          [data-compact-order-menu] [data-category-section-heading] {
+            background: transparent !important; padding: 0; font-size: 24px;
+          }
+        }
+      `}</style>
       {orderingAvailable ? (
         <div
           className={`border-b px-3 py-2 sm:px-5 ${
@@ -1442,7 +1476,7 @@ export default function RestaurantMenu({
           }}
         >
           <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
+          <div data-service-options className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
             {resolvedMenuEnabled && !orderingAvailable ? (
               <button
                 type="button"
@@ -1464,6 +1498,8 @@ export default function RestaurantMenu({
             {effectivePickupEnabled ? (
               <button
                 type="button"
+                data-service-choice
+                aria-pressed={activeService === "pickup"}
                 onClick={() => setActiveService("pickup")}
                 className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
                   activeService === "pickup"
@@ -1482,6 +1518,8 @@ export default function RestaurantMenu({
             {effectiveDeliveryEnabled ? (
               <button
                 type="button"
+                data-service-choice
+                aria-pressed={activeService === "delivery"}
                 onClick={() => setActiveService("delivery")}
                 className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
                   activeService === "delivery"
@@ -1646,6 +1684,7 @@ export default function RestaurantMenu({
                   </div>
                 ) : (
                   <h2
+                    data-category-section-heading
                     className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
                     style={{ backgroundColor, color: categoryHeadingColor || undefined }}
                   >
