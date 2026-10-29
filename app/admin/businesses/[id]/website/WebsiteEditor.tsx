@@ -18012,46 +18012,7 @@ function MobileWebsiteHeader({
     : mobileHeaderTitle;
   const menuCell = findFirstCellByType(grid.cells, "menu");
   const phoneCells = findAllCellsByType(grid.cells, "phone");
-  const buttonCells = findAllCellsByType(grid.cells, "button").filter((cell) =>
-    /online[\s-]*order|order[\s-]*online|온라인\s*오더|온라인\s*주문/i.test(String(cell.text || "")),
-  );
 
-  const gridMenuItems = menuCell ? normalizeMenuItems(menuCell) : [];
-  const submenuItems = Array.isArray(websiteSettings?.header_submenu_items)
-    ? websiteSettings.header_submenu_items.map((item) => ({
-        id: item.id || createId("mobile-menu"),
-        label: item.label || "Menu",
-        url: item.url || "#",
-        link_type: item.target_type || "section",
-        link_value: item.target_value || getLegacyMenuTarget(item.url || "").value,
-        image_url: "",
-        children: Array.isArray(item.children)
-          ? item.children.map((child) => ({
-              id: child.id || createId("mobile-submenu"),
-              label: child.label || "Submenu",
-              url: child.url || "#",
-              link_type: child.target_type || "section",
-              link_value:
-                child.target_value ||
-                getLegacyMenuTarget(child.url || "").value,
-              image_url: "",
-            }))
-          : [],
-      }))
-    : [];
-
-  // 헤더 메뉴 셀이 중첩 칸 안에 있거나 비어 있어도,
-  // 상단 서브메뉴 설정값을 이용해 모바일 메뉴가 반드시 표시되게 합니다.
-  const allMenuItems = gridMenuItems.length > 0 ? gridMenuItems : submenuItems;
-  const orderMenuItem = allMenuItems.find((item) =>
-    /online[\s-]*order|order[\s-]*online|온라인\s*오더|온라인\s*주문/i.test(item.label || ""),
-  );
-  const menuItems = buttonCells.length ? [] : [orderMenuItem || {
-    id: "mobile-online-order", label: "Online Order",
-    url: String(websiteSettings?.mobile_action_target_url || "/online-order"),
-    link_type: "external", link_value: String(websiteSettings?.mobile_action_target_url || "/online-order"),
-    image_url: "", children: [],
-  }];
 
   const mobileHeight = getMobileHeaderHeight(websiteSettings);
   const headerBackgroundColor = String(
@@ -18153,69 +18114,8 @@ function MobileWebsiteHeader({
             maxHeight: "min(70vh, 520px)",
           }}
         >
-          {menuItems.length ? (
-            <div className="flex w-full justify-end">
-              <nav className="grid w-full max-w-[280px] gap-1 text-right">
-                {menuItems.map((item) => {
-                  const children = Array.isArray(
-                    (item as typeof item & { children?: typeof menuItems }).children,
-                  )
-                    ? (item as typeof item & { children?: typeof menuItems }).children || []
-                    : [];
-
-                  return (
-                    <div key={item.id}>
-                      <a
-                        href={getGridMenuHref(item, business.id)}
-                        onClick={() => setOpen(false)}
-                        className="block w-full rounded-xl px-4 py-3 text-right font-black no-underline transition hover:opacity-70"
-                        style={{
-                          color: mobileControlColor,
-                          fontSize: `${Math.max(10, Math.min(40, Number(menuCell?.font_size || 14)))}px`,
-                          fontFamily:
-                            menuCell?.font_family === "serif"
-                              ? "Georgia, 'Times New Roman', serif"
-                              : menuCell?.font_family === "rounded"
-                                ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
-                                : menuCell?.font_family === "mono"
-                                  ? "'Courier New', monospace"
-                                  : "Arial, Helvetica, sans-serif",
-                        }}
-                      >
-                        {item.label || "Menu"}
-                      </a>
-
-                      {children.length > 0 ? (
-                        <div className="mb-2 border-r-2 pr-3" style={{ borderColor: `${mobileControlColor}33` }}>
-                          {children.map((child) => (
-                            <a
-                              key={child.id}
-                              href={getGridMenuHref(child, business.id)}
-                              onClick={() => setOpen(false)}
-                              className="block w-full rounded-lg px-4 py-2 text-right text-sm font-bold no-underline transition hover:opacity-70"
-                              style={{ color: mobileControlColor }}
-                            >
-                              └ {child.label || "Submenu"}
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </nav>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed px-4 py-4 text-center text-sm font-bold opacity-70">
-              메뉴 항목을 먼저 추가해주세요.
-            </div>
-          )}
-
-          {phoneCells.length || buttonCells.length ? (
-            <div
-              className="ml-auto mt-3 grid w-full max-w-[280px] gap-3 pt-4"
-              style={{ borderTop: `1px solid ${mobileControlColor}33` }}
-            >
+          {phoneCells.length ? (
+            <div className="ml-auto grid w-full max-w-[280px] gap-3">
               {phoneCells.map((cell) => {
                 const number = String(cell.phone_number || cell.text || getBusinessContactValue(business, ["phone", "phone_number", "telephone", "business_phone", "contact_phone"]) || "").trim();
                 return number ? (
@@ -18234,26 +18134,7 @@ function MobileWebsiteHeader({
                 ) : null;
               })}
 
-              {buttonCells.map((cell) => {
-                const href = normalizeButtonHref(cell.url);
-                const external = isExternalButtonHref(href);
-                return (
-                  <a
-                    key={cell.id}
-                    href={href || undefined}
-                    target={external ? "_blank" : undefined}
-                    rel={external ? "noreferrer noopener" : undefined}
-                    onClick={(event) => {
-                      if (!href) event.preventDefault();
-                      else setOpen(false);
-                    }}
-                    className="flex min-h-12 items-center justify-center rounded-full px-5 text-sm font-black text-white no-underline shadow"
-                    style={{ backgroundColor: accentColor }}
-                  >
-                    {getMobileButtonText(cell)}
-                  </a>
-                );
-              })}
+
             </div>
           ) : null}
         </div>
