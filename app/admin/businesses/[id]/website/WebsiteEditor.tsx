@@ -8784,28 +8784,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             40,
             Math.min(1200, Number(patch.logo_size_px) || 120),
           );
-          const currentHeight = Math.max(
-            48,
-            Number(
-              nextSettings.header_grid?.height_px ||
-                nextSettings.header_height_px ||
-                104,
-            ),
-          );
-          const requiredHeight = Math.min(
-            1200,
-            nextLogoSize + verticalPadding * 2,
-          );
-
           nextSettings.header_logo_size_px = nextLogoSize;
-          nextSettings.header_height_px = Math.max(
-            currentHeight,
-            requiredHeight,
-          );
-          nextSettings.header_grid = {
-            ...nextHeaderGrid,
-            height_px: Math.max(currentHeight, requiredHeight),
-          };
         }
 
         if (
@@ -21119,39 +21098,8 @@ function CellPreview({
       ),
     );
 
-    const actualHeaderHeight = Math.max(
-      48,
-      Math.min(
-        1200,
-        Number(
-          websiteSettings?.header_grid?.height_px ||
-            websiteSettings?.header_height_px ||
-            104,
-        ),
-      ),
-    );
-    const headerPadding = Math.max(
-      0,
-      Math.min(
-        48,
-        Number(websiteSettings?.header_vertical_padding_px || 8),
-      ),
-    );
-    const isMobileHeaderLogo =
-      area === "header" && previewDevice === "mobile";
-
-    const availableHeight =
-      area === "header" && !isMobileHeaderLogo
-        ? Math.max(24, actualHeaderHeight - headerPadding * 2)
-        : requestedLogoSize;
-
-    // 모바일 헤더에서는 사용자가 지정한 폰 로고 크기를 그대로 사용합니다.
-    // 데스크탑만 기존처럼 헤더 높이에 맞춰 제한합니다.
-    const logoSize = isMobileHeaderLogo
-      ? requestedLogoSize
-      : area === "header"
-        ? Math.min(requestedLogoSize, availableHeight)
-        : requestedLogoSize;
+    // Logo size controls width; preserve the original image aspect ratio.
+    const logoSize = requestedLogoSize;
 
     const homeHref = business.id
       ? `/business/${business.id}/website`
@@ -21173,9 +21121,9 @@ function CellPreview({
             className="block shrink-0 object-contain object-center"
             style={{
               width: `${logoSize}px`,
-              height: `${logoSize}px`,
+              height: "auto",
               maxWidth: "none",
-              maxHeight: isMobileHeaderLogo ? "none" : `${availableHeight}px`,
+              maxHeight: "none",
             }}
           />
         ) : (
@@ -21185,7 +21133,7 @@ function CellPreview({
               width: `${logoSize}px`,
               height: `${logoSize}px`,
               maxWidth: "none",
-              maxHeight: isMobileHeaderLogo ? "none" : `${availableHeight}px`,
+              maxHeight: "none",
               fontSize: `${Math.max(10, logoSize / 4)}px`,
             }}
           >
@@ -22912,38 +22860,10 @@ function HeaderSubmenuEditor({
                       }
 
                       if (control.key === "header_logo_size_px") {
-                        const verticalPadding = Math.max(
-                          0,
-                          Math.min(
-                            48,
-                            Number(
-                              websiteSettings.header_vertical_padding_px || 8,
-                            ),
-                          ),
-                        );
-                        const currentHeight = Math.max(
-                          48,
-                          Number(
-                            currentHeaderGrid.height_px ||
-                              websiteSettings.header_height_px ||
-                              104,
-                          ),
-                        );
-                        const requiredHeight = Math.min(
-                          1200,
-                          nextValue + verticalPadding * 2,
-                        );
-                        const nextHeight = Math.max(
-                          currentHeight,
-                          requiredHeight,
-                        );
-
                         onUpdate({
                           header_logo_size_px: nextValue,
-                          header_height_px: nextHeight,
                           header_grid: {
                             ...currentHeaderGrid,
-                            height_px: nextHeight,
                             cells: currentHeaderGrid.cells.map((cell) =>
                               cell.type === "logo"
                                 ? {
