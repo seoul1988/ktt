@@ -18610,11 +18610,7 @@ function PreviewSection({
         backgroundColor: sectionBackgroundColor,
       }}
     >
-      {isCollapsible ? (
-        <div className="absolute right-3 top-3 z-30 rounded-full bg-violet-600 px-3 py-1 text-[10px] font-black text-white shadow">
-          숨김 레이어 · 공개 페이지에서는 클릭 시 펼쳐짐
-        </div>
-      ) : null}
+      
       {!hasLayoutContent ? (
         <div className="px-5 pt-8 sm:px-10 sm:pt-10">
           <div className="mx-auto max-w-5xl">
