@@ -51,14 +51,14 @@ export default function BusinessServiceWorker({
 
     /*
      * KTown 기본 주소:
-     * /business/90/
+     * /business/90/website/
      *
      * 커스텀 도메인:
      * /
      */
     const scopePath = isCustomDomain
       ? "/"
-      : `/business/${businessId}/`;
+      : `/business/${businessId}/website/`;
 
     const expectedWorkerUrl = new URL(
       workerPath,
