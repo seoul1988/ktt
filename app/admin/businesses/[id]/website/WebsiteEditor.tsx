@@ -16865,7 +16865,7 @@ export function PublicWebsiteRenderer({
                 aria-label={device === "mobile" ? "Mobile quick actions" : "Delivery tracking"}
                 className={
                   device === "mobile"
-                    ? "fixed inset-x-0 bottom-0 z-[6000] border-t border-gray-200 bg-white/95 px-2 pt-1.5 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] backdrop-blur"
+                    ? "fixed inset-x-0 bottom-0 rounded-[20px] overflow-hidden z-[6000] border-t border-gray-200 bg-white/95 px-2 pt-1.5 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] backdrop-blur"
                     : "fixed bottom-5 right-5 z-[6000]"
                 }
                 style={
@@ -40599,7 +40599,7 @@ export function SavedOrderMobileBottom({ business, sections, preview = false }: 
   const status = getBusinessOpenStatus(parseBusinessTableHours(business.hours));
   if (!ready) return null;
   const content = <>
-    <nav aria-label="Mobile order navigation" className={`${preview ? "sticky bottom-0 z-40" : "fixed inset-x-0 bottom-0 z-[12000] sm:hidden"} border-t border-gray-200 bg-white px-2 pt-1.5 text-gray-950 shadow-lg`}
+    <nav aria-label="Mobile order navigation" className={`${preview ? "sticky bottom-0 z-40" : "fixed inset-x-0 bottom-0 rounded-[20px] overflow-hidden z-[12000] sm:hidden"} border-t border-gray-200 bg-white px-2 pt-1.5 text-gray-950 shadow-lg`}
       style={{ paddingBottom: "max(6px, env(safe-area-inset-bottom, 0px))" }}>
       <div className="grid grid-cols-[64px_minmax(0,1fr)_96px] items-center gap-1">
         <button type="button" aria-label="뒤로가기" onClick={() => {
