@@ -1542,14 +1542,12 @@ export default function RestaurantCheckoutModal({
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
 
-              {settings?.deliveryProvider === "uber_direct" &&
-              settings?.deliveryDispatchEnabled ? (
                 <div className="mt-3">
                   <button
                     type="button"
                     onClick={getUberDirectQuote}
-                    disabled={deliveryQuoteLoading}
-                    className="w-full rounded-xl border-2 border-gray-950 px-4 py-3 text-sm font-black disabled:opacity-50"
+                    disabled={deliveryQuoteLoading || settings?.deliveryProvider !== "uber_direct" || !settings?.deliveryDispatchEnabled}
+                    className="w-full rounded-xl border-2 border-gray-950 bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600 disabled:border-gray-300"
                   >
                     {deliveryQuoteLoading
                       ? "CALCULATING DELIVERY FEE…"
@@ -1557,6 +1555,12 @@ export default function RestaurantCheckoutModal({
                         ? "RECALCULATE DELIVERY FEE"
                         : "CALCULATE DELIVERY FEE"}
                   </button>
+
+                  {settings?.deliveryProvider !== "uber_direct" || !settings?.deliveryDispatchEnabled ? (
+                    <p role="status" className="mt-2 text-xs font-bold text-amber-800">
+                      Automatic delivery estimates are unavailable for this location. Please contact the restaurant.
+                    </p>
+                  ) : null}
 
                   {deliveryQuoteError ? (
                     <p className="mt-2 text-xs font-bold text-red-600">
@@ -1596,7 +1600,6 @@ export default function RestaurantCheckoutModal({
                     </div>
                   ) : null}
                 </div>
-              ) : null}
             </section> : null}
 
             {promoCodeVisible && promoCodeSettings ? (
