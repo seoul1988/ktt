@@ -178,7 +178,7 @@ export async function GET(
       supabase
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode",
+          "enforce_business_hours,pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -220,7 +220,16 @@ export async function GET(
 
     const smsConfig = await getRestaurantSmsConfig(supabase, businessId);
 
-    const orderWindow = getOrderWindow(business.hours, 15);
+    const enforceBusinessHours = settings?.enforce_business_hours !== false;
+    const orderWindow = enforceBusinessHours
+      ? getOrderWindow(business.hours, 15)
+      : {
+          enforceable: false,
+          open: true,
+          reason: "",
+          closesAt: null,
+          cutoffAt: null,
+        };
 
     const tipPresets = Array.isArray(settings?.tip_presets)
       ? settings.tip_presets
@@ -233,6 +242,7 @@ export async function GET(
         businessId,
         businessName: business.name || "Restaurant",
 
+        enforceBusinessHours,
         orderingOpen: orderWindow.open,
         orderingHoursEnforced: orderWindow.enforceable,
         orderingClosedReason: orderWindow.reason,
