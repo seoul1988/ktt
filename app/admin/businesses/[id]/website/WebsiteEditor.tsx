@@ -57,7 +57,7 @@ function HeaderOrderModes({ businessId }: { businessId: number }) {
   }, [businessId]);
   if (!state || (!state.pickup && !state.delivery)) return null;
   return <div data-header-order-modes={businessId} role="group" aria-label="Order type" className="inline-flex max-w-full items-center rounded-full bg-[#262626] p-1 text-[11px] font-black">
-    {(["pickup", "delivery"] as const).map(service => <button key={service} type="button" disabled={!state?.[service]} aria-pressed={state?.active === service}
+    {(["pickup", "delivery"] as const).filter(service => state[service]).map(service => <button key={service} type="button" disabled={!state?.[service]} aria-pressed={state?.active === service}
       onClick={() => window.dispatchEvent(new CustomEvent("restaurant-order-service-change", { detail: { businessId, service } }))}
       className="rounded-full px-3 py-2 disabled:opacity-40"
       style={{ backgroundColor: state?.active === service ? "#f5f5f5" : "transparent", color: state?.active === service ? "#111111" : "#bdbdbd" }}>
