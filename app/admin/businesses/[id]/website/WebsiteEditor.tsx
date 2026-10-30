@@ -14575,12 +14575,23 @@ function BusinessWebsiteBanners({
   if (!banner) return null;
   if (!editorPreview && typeof window !== "undefined" && !bannerMatchesPage((banner as WebsiteBanner & { target_page_url?: string | null }).target_page_url, window.location.href)) return null;
 
+  const popupWidth = Math.max(1, Number(banner.popup_width) || 720);
+  const popupHeight = Math.max(1, Number(banner.popup_height) || 520);
+  const isCircle = banner.style_preset === "circle";
+  // Reserve space for the dismissal controls inside the 90% viewport budget.
+  const popupHeightLimit = banner.dismiss_option_enabled !== false
+    ? "calc(90dvh - 80px)"
+    : "90dvh";
+  const popupWidthLimit = isCircle
+    ? `min(${popupWidth}px, calc(100vw - 32px), ${popupHeightLimit})`
+    : `min(${popupWidth}px, calc(100vw - 32px))`;
+
   const popupCard = (
     <section
-      className="relative w-full overflow-visible border border-black/10"
+      className="relative w-full shrink-0 overflow-hidden border border-black/10"
       style={{
         width: "100%",
-        maxWidth: "600px",
+        maxWidth: "100%",
         borderRadius:
           banner.style_preset === "circle"
             ? "50%"
@@ -14598,8 +14609,10 @@ function BusinessWebsiteBanners({
         boxShadow: getWebsitePopupShadow(
           banner.popup_shadow || "medium",
         ),
-        height: "auto",
-        aspectRatio: "1 / 1",
+        height: isCircle ? "auto" : `min(${popupHeight}px, ${popupHeightLimit})`,
+        maxHeight: popupHeightLimit,
+        aspectRatio: isCircle ? "1 / 1" : undefined,
+        isolation: "isolate",
         backgroundColor: banner.background_color || "#FFFFFF",
         backgroundImage: "none",
       }}
@@ -14609,14 +14622,16 @@ function BusinessWebsiteBanners({
         type="button"
         onClick={() => closePopup(banner.id)}
         className="absolute z-[100] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-black/60 text-xl font-black leading-none text-white shadow-xl hover:bg-black"
-        style={{ right: banner.style_preset === "circle" ? "-14px" : "12px", top: banner.style_preset === "circle" ? "12%" : "12px" }}
+        style={{ right: "12px", top: banner.style_preset === "circle" ? "12%" : "12px" }}
         aria-label="Close popup"
       >×</button>
 
       {banner.image_url ? (
-        <div className="pointer-events-none absolute z-10" style={{ inset: banner.style_preset === "circle" ? "14.65%" : "0" }}>
+        <div className="pointer-events-none absolute z-10 overflow-hidden" style={{ inset: banner.style_preset === "circle" ? "14.65%" : "0" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={banner.image_url} alt={banner.title} draggable={false} className="block h-full w-full select-none object-contain" />
+          <img src={banner.image_url} alt={banner.title} draggable={false}
+            className="block h-full w-full select-none"
+            style={{ width: "100%", height: "100%", maxWidth: "100%", maxHeight: "100%", objectFit: "contain", objectPosition: "center", transform: "none" }} />
         </div>
       ) : null}
 
@@ -14773,11 +14788,9 @@ function BusinessWebsiteBanners({
         style={{
           left: "50%",
           top: "50%",
-          width: previewDevice === "mobile" && editorPreview
-            ? "min(600px, 384px, calc(100vw - 32px), calc(100dvh - 110px))"
-            : "min(600px, calc(100vw - 32px), calc(100dvh - 110px))",
-          maxWidth: "600px",
-          maxHeight: "calc(100dvh - 32px)",
+          width: popupWidthLimit,
+          maxWidth: previewDevice === "mobile" && editorPreview ? "384px" : "100%",
+          maxHeight: "90dvh",
           transform: "translate(-50%, -50%)",
           margin: 0,
           padding: 0,
