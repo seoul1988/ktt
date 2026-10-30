@@ -501,6 +501,25 @@ type SectionContent = {
   restaurant_menu_menu_enabled?: boolean;
   restaurant_menu_pickup_enabled?: boolean;
   restaurant_menu_delivery_enabled?: boolean;
+  restaurant_menu_style?: "tabs" | "pills";
+  restaurant_menu_category_underline_color?: string;
+  /** 메뉴 카드 색상 설정 */
+  restaurant_menu_card_background_color?: string;
+  restaurant_menu_card_border_color?: string;
+  restaurant_menu_name_color?: string;
+  restaurant_menu_description_color?: string;
+  restaurant_menu_price_color?: string;
+  restaurant_menu_service_bar_background_color?: string;
+  restaurant_menu_service_text_color?: string;
+  restaurant_menu_service_active_text_color?: string;
+  restaurant_menu_category_bar_background_color?: string;
+  restaurant_menu_category_pill_background_color?: string;
+  restaurant_menu_category_pill_text_color?: string;
+  restaurant_menu_category_heading_color?: string;
+  restaurant_menu_area_background_color?: string;
+
+
+
 
   restaurant_menu_scroll_top_enabled?: boolean;
   restaurant_menu_scroll_top_button_color?: string;
@@ -5371,6 +5390,21 @@ function LinkPageContent({
             compact={previewDevice === "mobile"}
             backgroundColor={menuBackgroundColor}
             textColor={menuTextColor}
+            menuStyle={section.content?.restaurant_menu_style || "tabs"}
+            categoryUnderlineColor={section.content?.restaurant_menu_category_underline_color}
+            cardBackgroundColor={section.content?.restaurant_menu_card_background_color}
+            cardBorderColor={section.content?.restaurant_menu_card_border_color}
+            nameColor={section.content?.restaurant_menu_name_color}
+            descriptionColor={section.content?.restaurant_menu_description_color}
+            priceColor={section.content?.restaurant_menu_price_color}
+            serviceBarBackgroundColor={section.content?.restaurant_menu_service_bar_background_color}
+            serviceTextColor={section.content?.restaurant_menu_service_text_color}
+            serviceActiveTextColor={section.content?.restaurant_menu_service_active_text_color}
+            categoryBarBackgroundColor={section.content?.restaurant_menu_category_bar_background_color}
+            categoryPillBackgroundColor={section.content?.restaurant_menu_category_pill_background_color}
+            categoryPillTextColor={section.content?.restaurant_menu_category_pill_text_color}
+            categoryHeadingColor={section.content?.restaurant_menu_category_heading_color}
+            menuAreaBackgroundColor={section.content?.restaurant_menu_area_background_color}
             scrollTopEnabled={scrollTopEnabled}
             scrollTopButtonColor={scrollTopButtonColor}
             scrollTopIconColor={scrollTopIconColor}
@@ -14541,47 +14575,12 @@ function BusinessWebsiteBanners({
   if (!banner) return null;
   if (!editorPreview && typeof window !== "undefined" && !bannerMatchesPage((banner as WebsiteBanner & { target_page_url?: string | null }).target_page_url, window.location.href)) return null;
 
-  const popupHeight = Math.max(
-    320,
-    Math.min(900, Number(banner.popup_height) || 520),
-  );
-
   const popupCard = (
     <section
       className="relative w-full overflow-visible border border-black/10"
       style={{
-        width:
-          banner.style_preset === "circle"
-            ? `min(90vw, ${Math.max(
-                320,
-                Math.min(
-                  700,
-                  Math.min(
-                    Number(banner.popup_width) || 520,
-                    Number(banner.popup_height) || 520,
-                  ),
-                ),
-              )}px)`
-            : "100%",
-        maxWidth:
-          banner.style_preset === "circle"
-            ? `${Math.max(
-                320,
-                Math.min(
-                  700,
-                  Math.min(
-                    Number(banner.popup_width) || 520,
-                    Number(banner.popup_height) || 520,
-                  ),
-                ),
-              )}px`
-            : `${Math.max(
-                320,
-                Math.min(
-                  1100,
-                  Number(banner.popup_width) || 720,
-                ),
-              )}px`,
+        width: "100%",
+        maxWidth: "600px",
         borderRadius:
           banner.style_preset === "circle"
             ? "50%"
@@ -14599,48 +14598,12 @@ function BusinessWebsiteBanners({
         boxShadow: getWebsitePopupShadow(
           banner.popup_shadow || "medium",
         ),
-        height:
-          banner.style_preset === "circle"
-            ? "auto"
-            : `${popupHeight}px`,
-        aspectRatio:
-          banner.style_preset === "circle"
-            ? "1 / 1"
-            : undefined,
+        height: "auto",
+        aspectRatio: "1 / 1",
         backgroundColor: banner.background_color || "#FFFFFF",
         backgroundImage: "none",
       }}
     >
-      {banner.image_url && banner.image_position === "background" ? (
-        <div
-          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-          style={{ borderRadius: "inherit" }}
-          aria-hidden="true"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={banner.image_url}
-            alt=""
-            draggable={false}
-            decoding="sync"
-            className="block h-full w-full select-none"
-            style={{
-              objectFit:
-                banner.image_fit === "contain" ||
-                banner.image_fit === "fill"
-                  ? banner.image_fit
-                  : "cover",
-              objectPosition: "center",
-              transform: `scale(${Math.max(
-                25,
-                Math.min(300, Number(banner.image_zoom) || 100),
-              ) / 100})`,
-              transformOrigin: "center",
-              imageRendering: "auto",
-            }}
-          />
-        </div>
-      ) : null}
 
       <button
         type="button"
@@ -14650,33 +14613,10 @@ function BusinessWebsiteBanners({
         aria-label="Close popup"
       >×</button>
 
-      {banner.image_url && banner.image_position !== "background" ? (
-        <div
-          className="absolute z-10 overflow-hidden bg-white"
-          style={{
-            borderRadius: `${Math.max(0, Math.min(999, Number.isFinite(Number(banner.image_radius)) ? Number(banner.image_radius) : 18))}px`,
-            left: `${Number(banner.image_x) || 0}%`,
-            top: `${Number(banner.image_y) || 0}%`,
-            width: `${Number(banner.image_width) || 100}%`,
-            height: `${Number(banner.image_height) || 42}%`,
-          }}
-        >
+      {banner.image_url ? (
+        <div className="pointer-events-none absolute z-10" style={{ inset: banner.style_preset === "circle" ? "14.65%" : "0" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={banner.image_url}
-            alt={banner.title}
-            draggable={false}
-            className="h-full w-full select-none"
-            style={{
-              objectFit:
-                banner.image_fit === "cover" || banner.image_fit === "fill"
-                  ? banner.image_fit
-                  : "contain",
-              objectPosition: "center",
-              transform: `scale(${Math.max(25, Math.min(300, Number(banner.image_zoom) || 100)) / 100})`,
-              transformOrigin: "center",
-            }}
-          />
+          <img src={banner.image_url} alt={banner.title} draggable={false} className="block h-full w-full select-none object-contain" />
         </div>
       ) : null}
 
@@ -14833,13 +14773,10 @@ function BusinessWebsiteBanners({
         style={{
           left: "50%",
           top: "50%",
-          width: "calc(100vw - 32px)",
-          maxWidth:
-            previewDevice === "mobile"
-              ? "384px"
-              : editorPreview
-                ? "900px"
-                : "768px",
+          width: previewDevice === "mobile" && editorPreview
+            ? "min(600px, 384px, calc(100vw - 32px), calc(100dvh - 110px))"
+            : "min(600px, calc(100vw - 32px), calc(100dvh - 110px))",
+          maxWidth: "600px",
           maxHeight: "calc(100dvh - 32px)",
           transform: "translate(-50%, -50%)",
           margin: 0,
@@ -24323,6 +24260,169 @@ async function compressLinkPageImage(file: File) {
   return new File([blob], `${baseName}.webp`, { type: "image/webp" });
 }
 
+type RestaurantMenuEditorSettings = Pick<GridCell,
+  "restaurant_menu_menu_enabled" |
+  "restaurant_menu_pickup_enabled" |
+  "restaurant_menu_delivery_enabled" |
+  "restaurant_menu_style" |
+  "restaurant_menu_category_underline_color" |
+  "restaurant_menu_card_background_color" |
+  "restaurant_menu_card_border_color" |
+  "restaurant_menu_name_color" |
+  "restaurant_menu_description_color" |
+  "restaurant_menu_price_color" |
+  "restaurant_menu_service_bar_background_color" |
+  "restaurant_menu_service_text_color" |
+  "restaurant_menu_service_active_text_color" |
+  "restaurant_menu_category_bar_background_color" |
+  "restaurant_menu_category_pill_background_color" |
+  "restaurant_menu_category_pill_text_color" |
+  "restaurant_menu_category_heading_color" |
+  "restaurant_menu_area_background_color"
+>;
+
+function RestaurantMenuSettingsEditor({ cell, onUpdate }: {
+  cell: RestaurantMenuEditorSettings;
+  onUpdate: (patch: Partial<RestaurantMenuEditorSettings>) => void;
+}) {
+  return (
+        <div className="mt-4 rounded-2xl border-2 border-orange-400 bg-orange-50 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-base font-black text-orange-950">
+                이 메뉴에서 사용할 방식
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
+                MENU만 선택하면 보기 전용입니다. PICKUP 또는 DELIVERY를 선택하면
+                해당 주문 버튼이 메뉴 위에 표시됩니다.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-orange-600 px-2.5 py-1 text-[10px] font-black text-white">
+              ORDER MODE
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              {
+                key: "restaurant_menu_menu_enabled",
+                label: "MENU",
+                checked: cell.restaurant_menu_menu_enabled !== false,
+              },
+              {
+                key: "restaurant_menu_pickup_enabled",
+                label: "PICKUP",
+                checked: cell.restaurant_menu_pickup_enabled === true,
+              },
+              {
+                key: "restaurant_menu_delivery_enabled",
+                label: "DELIVERY",
+                checked: cell.restaurant_menu_delivery_enabled === true,
+              },
+            ].map((option) => (
+              <label
+                key={option.key}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 px-2 py-3 text-xs font-black transition ${
+                  option.checked
+                    ? "border-orange-600 bg-orange-600 text-white"
+                    : "border-orange-200 bg-white text-orange-950"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={option.checked}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+
+                    const nextMenu =
+                      option.key === "restaurant_menu_menu_enabled"
+                        ? nextValue
+                        : cell.restaurant_menu_menu_enabled !== false;
+
+                    const nextPickup =
+                      option.key === "restaurant_menu_pickup_enabled"
+                        ? nextValue
+                        : cell.restaurant_menu_pickup_enabled === true;
+
+                    const nextDelivery =
+                      option.key === "restaurant_menu_delivery_enabled"
+                        ? nextValue
+                        : cell.restaurant_menu_delivery_enabled === true;
+
+                    // 아무 것도 없는 상태는 허용하지 않습니다.
+                    if (!nextMenu && !nextPickup && !nextDelivery) {
+                      return;
+                    }
+
+                    onUpdate({
+                      [option.key]: nextValue,
+                    } as Partial<RestaurantMenuEditorSettings>);
+                  }}
+                  className="mb-2 h-4 w-4 accent-orange-600"
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
+            {cell.restaurant_menu_menu_enabled !== false &&
+            cell.restaurant_menu_pickup_enabled !== true &&
+            cell.restaurant_menu_delivery_enabled !== true
+              ? "현재: MENU 보기 전용 · PICKUP / DELIVERY 버튼 숨김"
+              : `현재 표시: ${
+                  [
+                    cell.restaurant_menu_menu_enabled !== false ? "MENU" : "",
+                    cell.restaurant_menu_pickup_enabled === true ? "PICKUP" : "",
+                    cell.restaurant_menu_delivery_enabled === true ? "DELIVERY" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                }`}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-orange-200 bg-white p-3">
+            <p className="mb-3 text-sm font-black text-gray-900">메뉴 스타일·색상 설정</p>
+            <label className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-700">
+              <span className="min-w-[86px]">메뉴 스타일</span>
+              <select value={cell.restaurant_menu_style || "tabs"}
+                onChange={(event) => onUpdate({ restaurant_menu_style: event.target.value === "pills" ? "pills" : "tabs" })}
+                className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-2 text-gray-950">
+                <option value="tabs">간결한 밑줄 탭</option>
+                <option value="pills">둥근 버튼</option>
+              </select>
+            </label>
+            {([
+              ["restaurant_menu_card_background_color", "카드 배경색", "#ffffff"],
+              ["restaurant_menu_card_border_color", "카드 테두리", "#e5e7eb"],
+              ["restaurant_menu_name_color", "메뉴 이름", "#111827"],
+              ["restaurant_menu_description_color", "메뉴 설명", "#6b7280"],
+              ["restaurant_menu_price_color", "메뉴 가격", "#111827"],
+              ["restaurant_menu_service_bar_background_color", "픽업·딜리버리 줄 배경", "#ffffff"],
+              ["restaurant_menu_service_text_color", "픽업·배달 글자", "#bdbdbd"],
+              ["restaurant_menu_service_active_text_color", "선택된 픽업·배달 글자", "#111827"],
+              ["restaurant_menu_category_bar_background_color", "카테고리 줄 전체 배경", "#ffffff"],
+              ["restaurant_menu_category_pill_background_color", "상단 카테고리 라운드 배경", "#111827"],
+              ["restaurant_menu_category_pill_text_color", "상단 카테고리 글자", "#ffffff"],
+              ["restaurant_menu_category_underline_color", "선택 탭 밑줄", "#ef3340"],
+              ["restaurant_menu_category_heading_color", "아래 카테고리 제목", "#111827"],
+              ["restaurant_menu_area_background_color", "메뉴 전체 셀 배경", "#ffffff"],
+            ] as const).map(([key, label, fallback]) => (
+              <label key={key} className="mb-2 flex items-center gap-2 text-xs font-bold text-gray-800">
+                <span className="min-w-[86px]">{label}</span>
+                <input type="color" value={cell[key] || fallback}
+                  onChange={(event) => onUpdate({ [key]: event.target.value } as Partial<RestaurantMenuEditorSettings>)}
+                  className="h-9 w-12 cursor-pointer rounded border border-gray-300 bg-white p-1" />
+                <input type="text" value={cell[key] || fallback}
+                  onChange={(event) => onUpdate({ [key]: event.target.value } as Partial<RestaurantMenuEditorSettings>)}
+                  className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-2 font-mono text-xs" />
+              </label>
+            ))}
+          </div>
+        </div>
+  );
+}
+
 function LinkPageEditor({
   section,
   businessId,
@@ -24689,88 +24789,10 @@ function LinkPageEditor({
 
         {pageTypeSelector}
 
-          <div className="mt-4 rounded-2xl border-2 border-orange-400 bg-orange-50 p-4 shadow-sm">
-            <p className="text-base font-black text-orange-950">
-              이 메뉴 페이지에서 사용할 방식
-            </p>
-            <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
-              MENU만 체크하면 보기 전용 메뉴가 되고 PICKUP / DELIVERY 버튼은 나타나지 않습니다.
-              주문 페이지는 PICKUP 또는 DELIVERY를 체크하세요.
-            </p>
-
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {[
-                {
-                  key: "restaurant_menu_menu_enabled",
-                  label: "MENU",
-                  checked:
-                    section.content?.restaurant_menu_menu_enabled !== false,
-                },
-                {
-                  key: "restaurant_menu_pickup_enabled",
-                  label: "PICKUP",
-                  checked:
-                    section.content?.restaurant_menu_pickup_enabled === true,
-                },
-                {
-                  key: "restaurant_menu_delivery_enabled",
-                  label: "DELIVERY",
-                  checked:
-                    section.content?.restaurant_menu_delivery_enabled === true,
-                },
-              ].map((option) => (
-                <label
-                  key={option.key}
-                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border px-2 py-3 text-xs font-black ${
-                    option.checked
-                      ? "border-blue-600 bg-blue-600 text-white"
-                      : "border-blue-200 bg-white text-blue-950"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={option.checked}
-                    onChange={(event) => {
-                      const nextValue = event.target.checked;
-
-                      const nextMenu =
-                        option.key === "restaurant_menu_menu_enabled"
-                          ? nextValue
-                          : section.content?.restaurant_menu_menu_enabled !== false;
-                      const nextPickup =
-                        option.key === "restaurant_menu_pickup_enabled"
-                          ? nextValue
-                          : section.content?.restaurant_menu_pickup_enabled === true;
-                      const nextDelivery =
-                        option.key === "restaurant_menu_delivery_enabled"
-                          ? nextValue
-                          : section.content?.restaurant_menu_delivery_enabled === true;
-
-                      // 최소 한 가지는 항상 남겨둡니다.
-                      if (!nextMenu && !nextPickup && !nextDelivery) {
-                        return;
-                      }
-
-                      onUpdate({
-                        [option.key]: nextValue,
-                      });
-                    }}
-                    className="mb-2 h-4 w-4"
-                  />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-
-            <div className="mt-3 rounded-lg bg-white px-3 py-2 text-[10px] font-bold leading-5 text-gray-600">
-              {section.content?.restaurant_menu_menu_enabled !== false &&
-              section.content?.restaurant_menu_pickup_enabled !== true &&
-              section.content?.restaurant_menu_delivery_enabled !== true
-                ? "현재: MENU 보기 전용 · 주문 버튼 숨김"
-                : "현재: 주문 방식 사용 · 체크한 PICKUP / DELIVERY 버튼만 표시"}
-            </div>
-          </div>
-
+        <RestaurantMenuSettingsEditor
+          cell={section.content || {}}
+          onUpdate={onUpdate}
+        />
 
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex items-start gap-3">
@@ -37459,140 +37481,7 @@ function TitleCellEditor({
       </Field>
 
       {mode === "restaurant-menu" ? (
-        <div className="mt-4 rounded-2xl border-2 border-orange-400 bg-orange-50 p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-base font-black text-orange-950">
-                이 메뉴에서 사용할 방식
-              </p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
-                MENU만 선택하면 보기 전용입니다. PICKUP 또는 DELIVERY를 선택하면
-                해당 주문 버튼이 메뉴 위에 표시됩니다.
-              </p>
-            </div>
-            <span className="shrink-0 rounded-full bg-orange-600 px-2.5 py-1 text-[10px] font-black text-white">
-              ORDER MODE
-            </span>
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {[
-              {
-                key: "restaurant_menu_menu_enabled",
-                label: "MENU",
-                checked: cell.restaurant_menu_menu_enabled !== false,
-              },
-              {
-                key: "restaurant_menu_pickup_enabled",
-                label: "PICKUP",
-                checked: cell.restaurant_menu_pickup_enabled === true,
-              },
-              {
-                key: "restaurant_menu_delivery_enabled",
-                label: "DELIVERY",
-                checked: cell.restaurant_menu_delivery_enabled === true,
-              },
-            ].map((option) => (
-              <label
-                key={option.key}
-                className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 px-2 py-3 text-xs font-black transition ${
-                  option.checked
-                    ? "border-orange-600 bg-orange-600 text-white"
-                    : "border-orange-200 bg-white text-orange-950"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={option.checked}
-                  onChange={(event) => {
-                    const nextValue = event.target.checked;
-
-                    const nextMenu =
-                      option.key === "restaurant_menu_menu_enabled"
-                        ? nextValue
-                        : cell.restaurant_menu_menu_enabled !== false;
-
-                    const nextPickup =
-                      option.key === "restaurant_menu_pickup_enabled"
-                        ? nextValue
-                        : cell.restaurant_menu_pickup_enabled === true;
-
-                    const nextDelivery =
-                      option.key === "restaurant_menu_delivery_enabled"
-                        ? nextValue
-                        : cell.restaurant_menu_delivery_enabled === true;
-
-                    // 아무 것도 없는 상태는 허용하지 않습니다.
-                    if (!nextMenu && !nextPickup && !nextDelivery) {
-                      return;
-                    }
-
-                    onUpdate({
-                      [option.key]: nextValue,
-                    } as Partial<GridCell>);
-                  }}
-                  className="mb-2 h-4 w-4 accent-orange-600"
-                />
-                {option.label}
-              </label>
-            ))}
-          </div>
-
-          <div className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
-            {cell.restaurant_menu_menu_enabled !== false &&
-            cell.restaurant_menu_pickup_enabled !== true &&
-            cell.restaurant_menu_delivery_enabled !== true
-              ? "현재: MENU 보기 전용 · PICKUP / DELIVERY 버튼 숨김"
-              : `현재 표시: ${
-                  [
-                    cell.restaurant_menu_menu_enabled !== false ? "MENU" : "",
-                    cell.restaurant_menu_pickup_enabled === true ? "PICKUP" : "",
-                    cell.restaurant_menu_delivery_enabled === true ? "DELIVERY" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                }`}
-          </div>
-
-          <div className="mt-4 rounded-xl border border-orange-200 bg-white p-3">
-            <p className="mb-3 text-sm font-black text-gray-900">메뉴 스타일·색상 설정</p>
-            <label className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-700">
-              <span className="min-w-[86px]">메뉴 스타일</span>
-              <select value={cell.restaurant_menu_style || "tabs"}
-                onChange={(event) => onUpdate({ restaurant_menu_style: event.target.value === "pills" ? "pills" : "tabs" })}
-                className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-2 text-gray-950">
-                <option value="tabs">간결한 밑줄 탭</option>
-                <option value="pills">둥근 버튼</option>
-              </select>
-            </label>
-            {([
-              ["restaurant_menu_card_background_color", "카드 배경색", "#ffffff"],
-              ["restaurant_menu_card_border_color", "카드 테두리", "#e5e7eb"],
-              ["restaurant_menu_name_color", "메뉴 이름", "#111827"],
-              ["restaurant_menu_description_color", "메뉴 설명", "#6b7280"],
-              ["restaurant_menu_price_color", "메뉴 가격", "#111827"],
-              ["restaurant_menu_service_bar_background_color", "픽업·딜리버리 줄 배경", "#ffffff"],
-              ["restaurant_menu_service_text_color", "픽업·배달 글자", "#bdbdbd"],
-              ["restaurant_menu_service_active_text_color", "선택된 픽업·배달 글자", "#111827"],
-              ["restaurant_menu_category_bar_background_color", "카테고리 줄 전체 배경", "#ffffff"],
-              ["restaurant_menu_category_pill_background_color", "상단 카테고리 라운드 배경", "#111827"],
-              ["restaurant_menu_category_pill_text_color", "상단 카테고리 글자", "#ffffff"],
-              ["restaurant_menu_category_underline_color", "선택 탭 밑줄", "#ef3340"],
-              ["restaurant_menu_category_heading_color", "아래 카테고리 제목", "#111827"],
-              ["restaurant_menu_area_background_color", "메뉴 전체 셀 배경", "#ffffff"],
-            ] as const).map(([key, label, fallback]) => (
-              <label key={key} className="mb-2 flex items-center gap-2 text-xs font-bold text-gray-800">
-                <span className="min-w-[86px]">{label}</span>
-                <input type="color" value={cell[key] || fallback}
-                  onChange={(event) => onUpdate({ [key]: event.target.value } as Partial<GridCell>)}
-                  className="h-9 w-12 cursor-pointer rounded border border-gray-300 bg-white p-1" />
-                <input type="text" value={cell[key] || fallback}
-                  onChange={(event) => onUpdate({ [key]: event.target.value } as Partial<GridCell>)}
-                  className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-2 font-mono text-xs" />
-              </label>
-            ))}
-          </div>
-        </div>
+        <RestaurantMenuSettingsEditor cell={cell} onUpdate={onUpdate} />
       ) : null}
 
       {mode === "catering-request-form" ? (
