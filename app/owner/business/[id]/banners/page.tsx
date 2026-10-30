@@ -658,13 +658,8 @@ export default function BannerManagementPage() {
       return;
     }
 
-    if (!endsAt) {
-      alert("팝업 종료일을 입력하세요.");
-      return;
-    }
-
     if (
-      startsAt &&
+      startsAt && endsAt &&
       new Date(startsAt).getTime() >=
         new Date(endsAt).getTime()
     ) {
@@ -1757,17 +1752,22 @@ export default function BannerManagementPage() {
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    종료일 (필수)
+                    종료일
                   </span>
                   <input
                     type="datetime-local"
-                    required
                     value={endsAt}
                     onChange={(event) =>
                       setEndsAt(event.target.value)
                     }
                     className="w-full rounded-xl border border-[#D9CFC2] px-3 py-3 text-xs font-bold"
                   />
+                  <span className="mt-2 flex items-center gap-2 text-xs font-bold text-[#172033]">
+                    <input type="checkbox" checked={!endsAt}
+                      onChange={(event) => setEndsAt(event.target.checked ? "" : toLocalDateTime(new Date(Date.now() + 86400000).toISOString()))} />
+                    Never · 무기한
+                  </span>
+                  <span className="mt-1 block text-[11px] text-[#667085]">종료일이 없으면 비활성화할 때까지 표시합니다.</span>
                 </label>
               </div>
 
@@ -1841,12 +1841,6 @@ export default function BannerManagementPage() {
                 boxShadow: getPopupShadow(popupShadow),
                 height: `${popupHeight}px`,
                 backgroundColor,
-                backgroundImage:
-                  imagePosition === "background" && imagePreview
-                    ? `linear-gradient(rgba(0,0,0,.36), rgba(0,0,0,.36)), url(${imagePreview})`
-                    : undefined,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
                 touchAction: "none",
               }}
               onPointerMove={handlePreviewPointerMove}
@@ -1865,13 +1859,13 @@ export default function BannerManagementPage() {
                 ×
               </button>
 
-              {imagePreview && imagePosition !== "background" && (
+              {imagePreview && (
                 <div
                   onPointerDown={(event) => {
                     event.currentTarget.setPointerCapture(event.pointerId);
                     setDragging("image");
                   }}
-                  className="absolute z-10 cursor-move overflow-hidden border-2 border-dashed border-amber-400 bg-white shadow-lg"
+                  className={`absolute cursor-move overflow-hidden ${imagePosition === "background" ? "z-0" : "z-10 border-2 border-dashed border-amber-400 bg-white shadow-lg"}`}
                   style={{
                     borderRadius: `${imageRadius}px`,
                     left: `${imageX}%`,
@@ -1884,8 +1878,10 @@ export default function BannerManagementPage() {
                   <img
   src={imagePreview}
   alt=""
-  className="h-full w-full object-contain"
+  className="h-full w-full pointer-events-none"
+  style={{ objectFit: imageFit, transform: `scale(${imageZoom / 100})`, transformOrigin: "center" }}
 />
+                  {imagePosition === "background" && <div className="pointer-events-none absolute inset-0 bg-black/35" />}
                   <span className="absolute bottom-1 left-1 rounded bg-black/60 px-2 py-1 text-[10px] font-black text-white">
                     이미지 이동
                   </span>
@@ -2067,7 +2063,7 @@ export default function BannerManagementPage() {
                           ? ` · 종료 ${new Date(
                               banner.ends_at,
                             ).toLocaleString()}`
-                          : ""}
+                          : " · 종료 Never (무기한)"}
                       </p>
                     </div>
 

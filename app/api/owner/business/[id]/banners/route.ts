@@ -209,16 +209,6 @@ function parseBoolean(value: unknown) {
   );
 }
 
-function requiredEndDate(value: unknown) {
-  const parsed = optionalDate(value);
-
-  if (!parsed) {
-    throw new Error("팝업 종료일을 입력하세요.");
-  }
-
-  return parsed;
-}
-
 function optionalDate(value: unknown) {
   const text = String(value || "").trim();
 
@@ -639,7 +629,7 @@ export async function POST(
           starts_at: optionalDate(
             formData.get("starts_at"),
           ),
-          ends_at: requiredEndDate(
+          ends_at: optionalDate(
             formData.get("ends_at"),
           ),
         })
@@ -959,7 +949,7 @@ export async function PATCH(
           starts_at: optionalDate(
             formData.get("starts_at"),
           ),
-          ends_at: requiredEndDate(
+          ends_at: optionalDate(
             formData.get("ends_at"),
           ),
           updated_at: new Date().toISOString(),
