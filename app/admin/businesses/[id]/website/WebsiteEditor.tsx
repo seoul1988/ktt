@@ -14652,6 +14652,13 @@ function BusinessWebsiteBanners({
         isolation: "isolate",
         backgroundColor: banner.background_color || "#FFFFFF",
         backgroundImage: "none",
+        // PNG artwork already supplies its own outline and rounded corners.
+        ...(fitArtwork ? {
+          backgroundColor: "transparent",
+          border: "none",
+          borderRadius: 0,
+          boxShadow: "none",
+        } : {}),
       }}
     >
 
