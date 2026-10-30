@@ -23,6 +23,27 @@ import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 // KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
 // inline 이미지의 baseline 때문에 생기는 3~4px 하단 틈을 방지합니다.
 
+// Hide the redundant order action while the menu's service selector is active.
+function HeaderOrderAction({ businessId, enabled, children }: {
+  businessId: number;
+  enabled: boolean;
+  children: React.ReactNode;
+}) {
+  const [menuOrderingVisible, setMenuOrderingVisible] = useState(false);
+  useEffect(() => {
+    if (!enabled) return;
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (String(detail?.businessId) !== String(businessId)) return;
+      setMenuOrderingVisible(detail.mounted !== false && Boolean(detail.pickup || detail.delivery));
+    };
+    window.addEventListener("restaurant-order-service-state", receive);
+    window.dispatchEvent(new CustomEvent("restaurant-order-service-request", { detail: { businessId } }));
+    return () => window.removeEventListener("restaurant-order-service-state", receive);
+  }, [businessId, enabled]);
+  return enabled && menuOrderingVisible ? null : <>{children}</>;
+}
+
 function HeaderOrderModes({ businessId }: { businessId: number }) {
   const [state, setState] = useState<{ active: string; pickup: boolean; delivery: boolean } | null>(null);
   useEffect(() => {
@@ -21584,6 +21605,8 @@ function CellPreview({
     const opensNewWindow = isExternalButtonHref(buttonHref);
 
     return (
+      <HeaderOrderAction businessId={business.id}
+        enabled={area === "header" && /order|pickup|delivery|주문/i.test(String(cell.text || ""))}>
       <a
         href={buttonHref || undefined}
         target={opensNewWindow ? "_blank" : undefined}
@@ -21624,6 +21647,7 @@ function CellPreview({
           ? getMobileButtonText(cell)
           : cell.text || "버튼"}
       </a>
+      </HeaderOrderAction>
     );
   }
   if (cell.type === "phone") {
