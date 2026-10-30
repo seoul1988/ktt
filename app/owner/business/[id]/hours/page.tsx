@@ -12,6 +12,7 @@ import { requireBusinessManagementAccess } from "@/lib/requireBusinessManagement
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 import BusinessHoursEditor from "./BusinessHoursEditor";
+import GoogleHoursAutoSync from "./GoogleHoursAutoSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function BusinessHoursPage({
     error: businessError,
   } = await supabaseAdmin
     .from("businesses")
-    .select("id, name, hours")
+    .select("id, name, hours, google_place_id, google_hours_auto_enabled, google_hours_checked_at, google_hours_result, google_hours_last_error")
     .eq("id", businessId)
     .maybeSingle();
 
@@ -111,6 +112,8 @@ export default async function BusinessHoursPage({
               Google 영업시간을 가져온 후 저장하세요.
             </p>
           </div>
+
+          <GoogleHoursAutoSync businessId={businessId} enabled={business.google_hours_auto_enabled===true} checkedAt={business.google_hours_checked_at} result={business.google_hours_result} lastError={business.google_hours_last_error} hasPlaceId={Boolean(business.google_place_id)} />
 
           <BusinessHoursEditor
             key={businessId}

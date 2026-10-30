@@ -44,3 +44,18 @@ backups/
 playwright/.auth/
 .vercel
 .env*
+
+# Local installers and packages
+/Apply.ps1
+/Install_*.ps1
+/*.patch
+/README.txt
+/server-env.example
+/KTown_Restaurant_Templates/
+
+# Local backup folders
+/*-backup-*/
+
+# Local verification scripts
+/scripts/test-order-domains.cjs
+/scripts/test-restaurant-brands.cjs
