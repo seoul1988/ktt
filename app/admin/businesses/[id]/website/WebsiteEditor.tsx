@@ -23,6 +23,28 @@ import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 // KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
 // inline 이미지의 baseline 때문에 생기는 3~4px 하단 틈을 방지합니다.
 
+function HeaderOrderModes({ businessId }: { businessId: number }) {
+  const [state, setState] = useState<{ active: string; pickup: boolean; delivery: boolean } | null>(null);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (String(detail?.businessId) === String(businessId)) setState(detail.mounted === false ? null : detail);
+    };
+    window.addEventListener("restaurant-order-service-state", receive);
+    window.dispatchEvent(new CustomEvent("restaurant-order-service-request", { detail: { businessId } }));
+    return () => window.removeEventListener("restaurant-order-service-state", receive);
+  }, [businessId]);
+  if (!state || (!state.pickup && !state.delivery)) return null;
+  return <div role="group" aria-label="Order type" className="inline-flex max-w-full items-center rounded-full bg-[#262626] p-1 text-[11px] font-black">
+    {(["pickup", "delivery"] as const).map(service => <button key={service} type="button" disabled={!state?.[service]} aria-pressed={state?.active === service}
+      onClick={() => window.dispatchEvent(new CustomEvent("restaurant-order-service-change", { detail: { businessId, service } }))}
+      className="rounded-full px-3 py-2 disabled:opacity-40"
+      style={{ backgroundColor: state?.active === service ? "#f5f5f5" : "transparent", color: state?.active === service ? "#111111" : "#bdbdbd" }}>
+      {service.toUpperCase()}
+    </button>)}
+  </div>;
+}
+
 type CellType =
   | "empty"
   | "logo"
@@ -312,6 +334,7 @@ type GridCell = {
   button_height_px?: number;
   button_no_wrap?: boolean;
   phone_number?: string;
+  phone_show_order_modes?: boolean;
   map_title?: string;
   map_address?: string;
   map_phone?: string;
@@ -13326,6 +13349,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                       ) : null}
 
                       {selectedCell.type === "phone" ? (
+                        <>
+                        <label className="mt-4 flex items-center gap-2 text-xs font-black text-gray-700">
+                          <input type="checkbox" checked={selectedCell.phone_show_order_modes === true} onChange={event => updateCell(selection.area as "header" | "hero", selectedCell.id, { phone_show_order_modes: event.target.checked }, selection.layoutId)} />
+                          전화번호 대신 픽업·배달 넣기
+                        </label>
                         <label className="mt-4 block text-xs font-black text-gray-700">
                           전화번호
                           <input
@@ -13345,6 +13373,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                             className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
                           />
                         </label>
+                        </>
                       ) : null}
 
                       {(selectedCell.display_mode === "auto-slider" || selectedCell.display_mode === "image-scroll" || selectedCell.display_mode === "gallery") ? (
@@ -18078,6 +18107,7 @@ function MobileWebsiteHeader({
           {phoneCells.length ? (
             <div className="ml-auto grid w-full max-w-[280px] gap-3">
               {phoneCells.map((cell) => {
+                if (cell.phone_show_order_modes) return <HeaderOrderModes key={cell.id} businessId={business.id} />;
                 const number = String(cell.phone_number || cell.text || getBusinessContactValue(business, ["phone", "phone_number", "telephone", "business_phone", "contact_phone"]) || "").trim();
                 return number ? (
                   <a
@@ -21576,6 +21606,7 @@ function CellPreview({
     );
   }
   if (cell.type === "phone") {
+    if (cell.phone_show_order_modes) return <HeaderOrderModes businessId={business.id} />;
     const savedPhone = [cell.phone_number, cell.text].find((value) =>
       typeof value === "string" && /\d{3}/.test(value),
     );
@@ -30562,6 +30593,11 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "phone" ? (
+          <>
+          <label className="mt-3 flex items-center gap-2 rounded-xl border border-gray-300 p-3 text-sm font-bold">
+            <input type="checkbox" checked={selectedCell.phone_show_order_modes === true} onChange={event => props.onUpdateCell(area, selectedCell.id, { phone_show_order_modes: event.target.checked }, selection.layoutId)} />
+            전화번호 대신 픽업·배달 넣기
+          </label>
           <button
             type="button"
             onClick={() => setPhoneEditorOpen(true)}
@@ -30570,6 +30606,7 @@ function RightPanel(props: {
             <span aria-hidden="true">☎</span>
             전화번호 입력·수정
           </button>
+          </>
         ) : area === "header" && selectedCell.type === "text" ? (
           <button
             type="button"
