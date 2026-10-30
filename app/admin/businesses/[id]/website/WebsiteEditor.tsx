@@ -14387,6 +14387,7 @@ function BusinessWebsiteBanners({
   const [dismissChecked, setDismissChecked] = useState(false);
   const [dismissHours, setDismissHours] = useState(24);
 
+  const [artworkSize, setArtworkSize] = useState<{ url: string; width: number; height: number } | null>(null);
   const [leadEmail, setLeadEmail] = useState("");
   const [leadExpanded, setLeadExpanded] = useState(false);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
@@ -14611,9 +14612,16 @@ function BusinessWebsiteBanners({
   const popupHeightLimit = banner.dismiss_option_enabled !== false
     ? "calc(90dvh - 80px)"
     : "90dvh";
+  const artworkRatio = banner.image_url && artworkSize?.url === banner.image_url
+    ? artworkSize.width / artworkSize.height
+    : null;
+  // The saved width and height are upper bounds; artwork determines the shape.
+  const fitArtwork = !isCircle && !banner.lead_capture_enabled && artworkRatio !== null;
   const popupWidthLimit = isCircle
     ? `min(${popupWidth}px, calc(100vw - 32px), ${popupHeightLimit})`
-    : `min(${popupWidth}px, calc(100vw - 32px))`;
+    : fitArtwork
+      ? `min(${popupWidth}px, ${popupHeight * artworkRatio!}px, calc(100vw - 32px), calc(${popupHeightLimit} * ${artworkRatio!}))`
+      : `min(${popupWidth}px, calc(100vw - 32px))`;
 
   const popupCard = (
     <section
@@ -14638,9 +14646,9 @@ function BusinessWebsiteBanners({
         boxShadow: getWebsitePopupShadow(
           banner.popup_shadow || "medium",
         ),
-        height: isCircle ? "auto" : `min(${popupHeight}px, ${popupHeightLimit})`,
+        height: isCircle || fitArtwork ? "auto" : `min(${popupHeight}px, ${popupHeightLimit})`,
         maxHeight: popupHeightLimit,
-        aspectRatio: isCircle ? "1 / 1" : undefined,
+        aspectRatio: isCircle ? "1 / 1" : fitArtwork ? String(artworkRatio) : undefined,
         isolation: "isolate",
         backgroundColor: banner.background_color || "#FFFFFF",
         backgroundImage: "none",
@@ -14659,6 +14667,12 @@ function BusinessWebsiteBanners({
         <div className="pointer-events-none absolute z-10 overflow-hidden" style={{ inset: banner.style_preset === "circle" ? "14.65%" : "0" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={banner.image_url} alt={banner.title} draggable={false}
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                setArtworkSize({ url: banner.image_url!, width: image.naturalWidth, height: image.naturalHeight });
+              }
+            }}
             className="block h-full w-full select-none"
             style={{ width: "100%", height: "100%", maxWidth: "100%", maxHeight: "100%", objectFit: "contain", objectPosition: "center", transform: "none" }} />
         </div>
