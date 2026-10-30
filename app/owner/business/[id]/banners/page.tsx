@@ -29,6 +29,7 @@ type Banner = {
   title: string;
   subtitle: string | null;
   button_text: string | null;
+  target_page_url?: string | null;
   link_url: string | null;
   image_url: string | null;
   background_color: string;
@@ -329,6 +330,7 @@ export default function BannerManagementPage() {
   const [subtitleEnabled, setSubtitleEnabled] = useState(true);
   const [buttonText, setButtonText] =
     useState(TEMPLATES[0].buttonText);
+  const [targetPageUrl, setTargetPageUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -502,6 +504,7 @@ export default function BannerManagementPage() {
     setTitleEnabled(true);
     setSubtitleEnabled(true);
     setButtonText(template.buttonText);
+    setTargetPageUrl("");
     setLinkUrl("");
     setImageFile(null);
     setImagePreview("");
@@ -570,6 +573,7 @@ export default function BannerManagementPage() {
     setTitleEnabled(Boolean(String(banner.title || "").trim()));
     setSubtitleEnabled(Boolean(String(banner.subtitle || "").trim()));
     setButtonText(banner.button_text || "");
+    setTargetPageUrl(banner.target_page_url || "");
     setLinkUrl(banner.link_url || "");
     setImageFile(null);
     setImagePreview(banner.image_url || "");
@@ -674,6 +678,7 @@ export default function BannerManagementPage() {
     try {
       const formData = new FormData();
       formData.append("banner_type", "popup");
+      formData.append("target_page_url", targetPageUrl.trim());
       formData.append(
         "template_style",
         selectedTemplate.style,
@@ -1013,6 +1018,11 @@ export default function BannerManagementPage() {
           </div>
         )}
 
+        <section className="mb-5 rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
+          <label className="block text-sm font-black text-[#172033]" htmlFor="target-page-url">배너를 띄울 페이지 주소</label>
+          <input id="target-page-url" value={targetPageUrl} onChange={(event) => setTargetPageUrl(event.target.value)} placeholder="/business/293/website 또는 https://example.com/order" className="mt-3 w-full rounded-xl border border-[#D9CFC2] px-4 py-3 text-sm outline-none" />
+          <p className="mt-2 text-xs text-[#667085]">입력한 페이지에서만 표시합니다. 비워두면 기존처럼 표시합니다. 주소에 ? 옵션을 넣으면 해당 옵션도 일치해야 합니다.</p>
+        </section>
         <section className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
           <h2 className="text-lg font-black text-[#172033]">
             자유 디자인 팝업

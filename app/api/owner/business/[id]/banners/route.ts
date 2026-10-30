@@ -1,3 +1,4 @@
+import { normalizeBannerTarget } from "@/lib/banner-page-target";
 import { randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -508,6 +509,7 @@ export async function POST(
             String(
               formData.get("button_text") || "",
             ).trim() || null,
+          target_page_url: normalizeBannerTarget(formData.get("target_page_url")),
           link_url:
             String(
               formData.get("link_url") || "",
@@ -827,6 +829,7 @@ export async function PATCH(
             String(
               formData.get("button_text") || "",
             ).trim() || null,
+          target_page_url: normalizeBannerTarget(formData.get("target_page_url")),
           link_url:
             String(
               formData.get("link_url") || "",

@@ -148,6 +148,7 @@ export async function GET(
           "lead_expanded_mode",
           "dismiss_option_enabled",
           "dismiss_hours",
+          "target_page_url",
           "display_order",
         ].join(","),
       )

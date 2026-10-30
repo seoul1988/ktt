@@ -1,5 +1,7 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+import { bannerMatchesPage } from "@/lib/banner-page-target";
 import type { CSSProperties } from "react";
 import {
   Fragment,
@@ -14304,6 +14306,14 @@ function BusinessWebsiteBanners({
   previewDevice?: "desktop" | "mobile";
   editorPreview?: boolean;
 }) {
+  const pathname = usePathname();
+  const [pageAddress, setPageAddress] = useState("");
+  useEffect(() => {
+    const refresh = () => setPageAddress(window.location.href);
+    refresh();
+    const timer = window.setInterval(refresh, 400);
+    return () => window.clearInterval(timer);
+  }, [pathname]);
   const [banners, setBanners] = useState<WebsiteBanner[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -14351,7 +14361,7 @@ function BusinessWebsiteBanners({
         if (cancelled) return;
 
         const nextBanners = Array.isArray(payload.banners)
-          ? payload.banners
+          ? payload.banners.filter((banner) => editorPreview || bannerMatchesPage((banner as WebsiteBanner & { target_page_url?: string | null }).target_page_url, pageAddress || window.location.href))
           : [];
 
         setBanners(nextBanners);
@@ -14407,7 +14417,7 @@ function BusinessWebsiteBanners({
       cancelled = true;
       controller.abort();
     };
-  }, [businessId, editorPreview]);
+  }, [businessId, editorPreview, pageAddress]);
 
   useEffect(() => {
     setLeadEmail("");
@@ -14529,6 +14539,7 @@ function BusinessWebsiteBanners({
   );
 
   if (!banner) return null;
+  if (!editorPreview && typeof window !== "undefined" && !bannerMatchesPage((banner as WebsiteBanner & { target_page_url?: string | null }).target_page_url, window.location.href)) return null;
 
   const popupHeight = Math.max(
     320,
