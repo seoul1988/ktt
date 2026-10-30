@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -34,6 +35,8 @@ function standalone() {
 }
 
 export default function InstallAppButton({ businessName }: { businessName?: string }) {
+  const pathname = usePathname();
+  const businessPath = /^\/business(?:es)?\/\d+\/website(?:\/|$)/.test(pathname || "");
   const id = useRef("");
   const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const installedRef = useRef(false);
@@ -50,7 +53,7 @@ export default function InstallAppButton({ businessName }: { businessName?: stri
   const [notice, setNotice] = useState(false);
   const [name, setName] = useState(businessName?.trim() || "KTown Triangle");
   const touchX = useRef<number | null>(null);
-  const priority = businessName?.trim() ? 2 : 1;
+  const priority = businessName?.trim() || businessPath ? 2 : 1;
 
   useEffect(() => {
     setReady(true);
@@ -84,10 +87,18 @@ export default function InstallAppButton({ businessName }: { businessName?: stri
     const observer = new MutationObserver(update);
     if (title) observer.observe(title, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
-  }, [businessName, owner]);
+  }, [businessName, owner, pathname]);
 
   useEffect(() => {
     if (!owner) return;
+    // Installation and dismissal state belong to the current restaurant.
+    installedRef.current = false;
+    promptRef.current = null;
+    setInstalled(false);
+    setAvailable(false);
+    setBanner(false);
+    setGuide(false);
+    setNotice(false);
     const installedKey = storageKey("pwa_installed");
     const hideKey = storageKey("install_banner_hide_until");
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
@@ -163,7 +174,7 @@ export default function InstallAppButton({ businessName }: { businessName?: stri
       document.removeEventListener("visibilitychange", onVisible);
       mode.removeEventListener?.("change", check);
     };
-  }, [owner]);
+  }, [owner, pathname]);
 
   useEffect(() => {
     if (!guide || !owner) return;
@@ -216,7 +227,7 @@ export default function InstallAppButton({ businessName }: { businessName?: stri
   }
 
   if (!ready || !owner) return null;
-  if (!businessName?.trim() && window.location.pathname !== "/") return null;
+  if (!businessName?.trim() && !businessPath && pathname !== "/") return null;
   if (installed) return notice ? createPortal(
     <div role="status" aria-live="polite" className="fixed left-1/2 top-5 z-[100001] w-[calc(100%-32px)] max-w-sm -translate-x-1/2 rounded-2xl bg-[#172033] px-5 py-4 text-center text-white shadow-2xl">
       <p className="text-sm font-black">✓ {name} has been installed.</p>

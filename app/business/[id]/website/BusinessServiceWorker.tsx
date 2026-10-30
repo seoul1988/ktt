@@ -51,14 +51,14 @@ export default function BusinessServiceWorker({
 
     /*
      * KTown 기본 주소:
-     * /business/90/website/
+     * /business/90/website (끝의 / 없이 직접 진입 포함)
      *
      * 커스텀 도메인:
      * /
      */
     const scopePath = isCustomDomain
       ? "/"
-      : `/business/${businessId}/website/`;
+      : `/business/${businessId}/website`;
 
     const expectedWorkerUrl = new URL(
       workerPath,
@@ -71,7 +71,7 @@ export default function BusinessServiceWorker({
     ).href;
 
     const reloadKey =
-      `business-sw-reload-v4-${businessId}`;
+      `business-sw-reload-v5-${businessId}`;
 
     let cancelled = false;
 
@@ -149,7 +149,9 @@ export default function BusinessServiceWorker({
             },
           );
 
-        await registration.update();
+        await registration.update().catch((error) => {
+          console.warn("Business service worker update check failed:", error);
+        });
 
         if (cancelled) return;
 
