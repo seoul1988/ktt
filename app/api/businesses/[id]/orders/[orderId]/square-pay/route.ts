@@ -1,3 +1,4 @@
+import {getOrderWeekdayGate} from "@/lib/restaurant-order/closed-weekdays";
 import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import {
@@ -166,6 +167,12 @@ export async function POST(
         retryPayment: false,
       }, { status: 409 });
     }
+
+    // Recheck exclusion before submitting a new charge, even for an older prepared order.
+    const weekdaySettings = await db.from("restaurant_order_settings").select("order_closed_weekdays").eq("business_id",businessId).maybeSingle();
+    if(weekdaySettings.error) throw weekdaySettings.error;
+    const weekdayGate = getOrderWeekdayGate(weekdaySettings.data?.order_closed_weekdays);
+    if(weekdayGate.blocked) return NextResponse.json({error:weekdayGate.reason,orderingClosed:true,orderingWeekdayBlocked:true},{status:400});
 
     const amountCents = moneyCents(
       Number(order.total || 0),

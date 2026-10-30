@@ -1,3 +1,4 @@
+import {getOrderWeekdayGate} from "@/lib/restaurant-order/closed-weekdays";
 import { NextResponse } from "next/server";
 import {
   getOrderAdmin,
@@ -553,7 +554,7 @@ export async function POST(
 
     const [
       { data: business },
-      { data: settings },
+      { data: settings, error: orderSettingsError },
       { data: privateSettings },
     ] = await Promise.all([
       db
@@ -565,7 +566,7 @@ export async function POST(
       db
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,order_closed_weekdays",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -580,6 +581,10 @@ export async function POST(
         .eq("business_id", businessId)
         .maybeSingle(),
     ]);
+
+    if (orderSettingsError) throw orderSettingsError;
+    const weekdayGate = getOrderWeekdayGate(settings?.order_closed_weekdays);
+    if (weekdayGate.blocked) return NextResponse.json({error:weekdayGate.reason,orderingClosed:true,orderingWeekdayBlocked:true},{status:400});
 
     const enforceBusinessHours =
       settings?.enforce_business_hours !== false;

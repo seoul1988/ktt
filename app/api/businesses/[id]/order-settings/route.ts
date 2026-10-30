@@ -1,3 +1,4 @@
+import {getOrderWeekdayGate,normalizeClosedWeekdays} from "@/lib/restaurant-order/closed-weekdays";
 import { getRestaurantSmsConfig } from "@/lib/restaurant-order/sms-config";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -178,7 +179,7 @@ export async function GET(
       supabase
         .from("restaurant_order_settings")
         .select(
-          "enforce_business_hours,pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode",
+          "enforce_business_hours,order_closed_weekdays,pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -221,7 +222,10 @@ export async function GET(
     const smsConfig = await getRestaurantSmsConfig(supabase, businessId);
 
     const enforceBusinessHours = settings?.enforce_business_hours !== false;
-    const orderWindow = enforceBusinessHours
+    const weekdayGate = getOrderWeekdayGate(settings?.order_closed_weekdays);
+    const orderWindow = weekdayGate.blocked
+      ? {enforceable:true,open:false,reason:weekdayGate.reason,closesAt:null,cutoffAt:null}
+      : enforceBusinessHours
       ? getOrderWindow(business.hours, 15)
       : {
           enforceable: false,
@@ -243,6 +247,8 @@ export async function GET(
         businessName: business.name || "Restaurant",
 
         enforceBusinessHours,
+        orderClosedWeekdays: normalizeClosedWeekdays(settings?.order_closed_weekdays),
+        orderingWeekdayBlocked: weekdayGate.blocked,
         orderingOpen: orderWindow.open,
         orderingHoursEnforced: orderWindow.enforceable,
         orderingClosedReason: orderWindow.reason,

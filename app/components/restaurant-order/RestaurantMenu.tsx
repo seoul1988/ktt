@@ -2144,18 +2144,19 @@ export default function RestaurantMenu({
                         {cartItems.length ? (
                           <button
                             type="button"
-                            disabled={availablePromotions.some(promotionNeedsCustomerSelection)}
+                            disabled={orderingClosed || availablePromotions.some(promotionNeedsCustomerSelection)}
                             onClick={() => {
+                              if (orderingClosed) return;
                               setCartOpen(false);
                               setCheckoutOpen(true);
                             }}
                             className={
                               isIPhone
-                                ? `col-span-2 rounded-xl px-4 py-2.5 text-xs font-black text-white ${availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
-                                : `col-span-2 rounded-xl px-4 py-3 text-xs font-black text-white ${availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
+                                ? `col-span-2 rounded-xl px-4 py-2.5 text-xs font-black text-white ${orderingClosed || availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
+                                : `col-span-2 rounded-xl px-4 py-3 text-xs font-black text-white ${orderingClosed || availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
                             }
                           >
-                            {availablePromotions.some(promotionNeedsCustomerSelection) ? "SELECT DEAL ITEM" : "CHECKOUT"}
+                            {orderingClosed ? "ORDERING CLOSED" : availablePromotions.some(promotionNeedsCustomerSelection) ? "SELECT DEAL ITEM" : "CHECKOUT"}
                           </button>
                         ) : null}
                       </div>

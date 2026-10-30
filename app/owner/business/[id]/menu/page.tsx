@@ -1,5 +1,7 @@
 "use client";
 
+import {ORDER_WEEKDAYS,normalizeClosedWeekdays} from "@/lib/restaurant-order/closed-weekdays";
+
 import Link from "next/link";
 import IntegrationSettings from "./IntegrationSettings";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -762,6 +764,8 @@ export default function OwnerBusinessMenuPage() {
   const [deliveryModeEnabled, setDeliveryModeEnabled] = useState(false);
 
   const [enforceBusinessHours, setEnforceBusinessHours] = useState(true);
+  const [orderClosedWeekdays,setOrderClosedWeekdays] = useState<number[]>([]);
+  const [savingClosedWeekdays,setSavingClosedWeekdays] = useState(false);
   const [savingBusinessHoursRule, setSavingBusinessHoursRule] = useState(false);
 
   const [deliveryFeePolicyMode, setDeliveryFeePolicyMode] =
@@ -1005,6 +1009,7 @@ export default function OwnerBusinessMenuPage() {
         setPickupModeEnabled(modes.pickup === true);
         setDeliveryModeEnabled(modes.delivery === true);
         setEnforceBusinessHours(data?.enforceBusinessHours !== false);
+        setOrderClosedWeekdays(normalizeClosedWeekdays(data?.orderClosedWeekdays));
 
         setDeliveryFeePolicyMode(
           data?.deliveryFeePolicyMode === "customer_100" ||
@@ -1579,6 +1584,22 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
+  async function updateClosedWeekday(day:number,checked:boolean) {
+    if(savingClosedWeekdays) return;
+    const previous=orderClosedWeekdays;
+    const next=normalizeClosedWeekdays(checked?[...previous,day]:previous.filter(value=>value!==day));
+    setOrderClosedWeekdays(next);setSavingClosedWeekdays(true);setOrderSettingsMessage("주문 제외 요일 저장 중...");
+    try {
+      const token=await getAccessToken();
+      const response=await fetch(`/api/owner/business/${businessId}/order-settings`, {method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({orderClosedWeekdays:next})});
+      const data=await readApiJson(response);
+      if(!response.ok) throw new Error(data?.error||"주문 제외 요일 저장 실패");
+      const saved=normalizeClosedWeekdays(data.orderClosedWeekdays);setOrderClosedWeekdays(saved);
+      setOrderSettingsMessage(saved.length?"✓ 선택한 요일에는 픽업·배달 온라인 주문을 받지 않습니다.":"✓ 주문 제외 요일이 없습니다.");
+    } catch(error) {setOrderClosedWeekdays(previous);setOrderSettingsMessage(error instanceof Error?`저장 실패: ${error.message}`:"주문 제외 요일 저장 실패");}
+    finally {setSavingClosedWeekdays(false);}
+  }
+
   async function updateBusinessHoursRule(checked: boolean) {
     if (savingBusinessHoursRule) return;
 
@@ -1638,7 +1659,7 @@ export default function OwnerBusinessMenuPage() {
       setOrderSettingsMessage(
         saved
           ? "✓ 영업시간 내에만 주문을 받습니다."
-          : "⚠️ 테스트 모드: 영업시간 외에도 주문을 받습니다.",
+          : "⚠️ 영업시간 제한 해제. 주문 제외 요일은 계속 차단됩니다.",
       );
     } catch (error) {
       setEnforceBusinessHours(previous);
@@ -6025,7 +6046,7 @@ export default function OwnerBusinessMenuPage() {
                     ? "border-emerald-400 bg-emerald-50"
                     : "border-red-400 bg-red-50"
                 }`}
-                title="체크하면 영업시간에만 주문을 받고, 해제하면 테스트용으로 언제든 주문을 받을 수 있습니다."
+                title="체크하면 영업시간에만 주문을 받고, 해제하면 영업시간 제한만 풀립니다. 주문 제외 요일은 계속 차단됩니다."
               >
                 <input
                   type="checkbox"
@@ -6067,9 +6088,16 @@ export default function OwnerBusinessMenuPage() {
             </div>
           </div>
 
+          <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50/50 p-4">
+            <p className="text-sm font-black text-gray-950">온라인 주문 제외 요일</p>
+            <p className="mt-1 text-xs leading-5 text-gray-600">선택한 요일에는 매장이 영업 중이어도 픽업·배달 주문을 받지 않습니다. 미 동부시간 기준이며 Google 영업시간 업데이트와 별도로 유지됩니다. 선택 즉시 저장됩니다.</p>
+            <div className="mt-3 flex flex-wrap gap-2">{ORDER_WEEKDAYS.map(day=><label key={day.value} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${orderClosedWeekdays.includes(day.value)?"border-red-300 bg-red-50 text-red-800":"border-gray-200 bg-white text-gray-800"}`}><input type="checkbox" checked={orderClosedWeekdays.includes(day.value)} disabled={savingClosedWeekdays} onChange={event=>void updateClosedWeekday(day.value,event.target.checked)} className="h-4 w-4 accent-red-600 disabled:opacity-40"/>{day.label}</label>)}</div>
+            {orderClosedWeekdays.length===7?<p className="mt-3 text-xs font-black text-red-700">모든 요일을 선택했습니다. 온라인 주문이 매일 차단됩니다.</p>:null}
+          </div>
+
           {!enforceBusinessHours ? (
             <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2 text-xs font-black text-red-800">
-              ⚠️ 테스트 모드 활성화: 현재 영업시간 외에도 고객 주문이 가능합니다. 테스트 후 반드시 다시 체크하세요.
+              ⚠️ 테스트 모드 활성화: 영업시간 외에도 고객 주문이 가능합니다. 주문 제외 요일은 계속 차단됩니다. 테스트 후 다시 체크하세요.
             </div>
           ) : null}
 

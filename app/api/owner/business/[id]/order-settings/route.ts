@@ -1,3 +1,4 @@
+import {normalizeClosedWeekdays} from "@/lib/restaurant-order/closed-weekdays";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -293,7 +294,7 @@ export async function GET(
     } = await access.supabase
       .from("restaurant_order_settings")
       .select(
-        "tax_rate,tip_presets,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,sms_enabled,popular_picks_enabled",
+        "tax_rate,tip_presets,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,order_closed_weekdays,sms_enabled,popular_picks_enabled",
       )
       .eq("business_id", businessId)
       .maybeSingle();
@@ -340,6 +341,7 @@ export async function GET(
           ),
         enforceBusinessHours:
           settings?.enforce_business_hours !== false,
+        orderClosedWeekdays: normalizeClosedWeekdays(settings?.order_closed_weekdays),
         smsEnabled:
           settings?.sms_enabled === true,
         popularPicksEnabled: settings?.popular_picks_enabled !== false,
@@ -392,6 +394,13 @@ export async function PUT(
     }
 
     const body = await request.json();
+    const hasClosedWeekdays = Object.prototype.hasOwnProperty.call(body || {}, "orderClosedWeekdays");
+    let orderClosedWeekdays: number[] | undefined;
+    if (hasClosedWeekdays) {
+      try { orderClosedWeekdays = normalizeClosedWeekdays(body.orderClosedWeekdays, true); }
+      catch (error) { return NextResponse.json({error: error instanceof Error ? error.message : "잘못된 주문 제외 요일입니다."}, {status:400}); }
+    }
+
 
     const hasModes = [
       "menu",
@@ -456,6 +465,7 @@ export async function PUT(
       !hasDeliveryFeePolicyMode &&
       !hasDeliveryFeeShareRules &&
       !hasEnforceBusinessHours &&
+      !hasClosedWeekdays &&
       !hasSmsEnabled &&
       !hasPopularPicksEnabled
     ) {
@@ -841,6 +851,14 @@ export async function PUT(
         );
     }
 
+    if (hasClosedWeekdays) {
+      const result = await access.supabase.from("restaurant_order_settings")
+        .upsert({business_id:businessId,order_closed_weekdays:orderClosedWeekdays,updated_at:new Date().toISOString()}, {onConflict:"business_id"})
+        .select("order_closed_weekdays").single();
+      if(result.error) throw result.error;
+      orderClosedWeekdays = normalizeClosedWeekdays(result.data?.order_closed_weekdays);
+    }
+
     if (hasEnforceBusinessHours) {
       const enabled =
         body.enforceBusinessHours !== false;
@@ -983,6 +1001,7 @@ export async function PUT(
         ...(enforceBusinessHours !== undefined
           ? { enforceBusinessHours }
           : {}),
+        ...(orderClosedWeekdays !== undefined ? {orderClosedWeekdays} : {}),
         ...(smsEnabled !== undefined
           ? { smsEnabled }
           : {}),
