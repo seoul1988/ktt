@@ -35,7 +35,7 @@ function HeaderOrderModes({ businessId }: { businessId: number }) {
     return () => window.removeEventListener("restaurant-order-service-state", receive);
   }, [businessId]);
   if (!state || (!state.pickup && !state.delivery)) return null;
-  return <div role="group" aria-label="Order type" className="inline-flex max-w-full items-center rounded-full bg-[#262626] p-1 text-[11px] font-black">
+  return <div data-header-order-modes={businessId} role="group" aria-label="Order type" className="inline-flex max-w-full items-center rounded-full bg-[#262626] p-1 text-[11px] font-black">
     {(["pickup", "delivery"] as const).map(service => <button key={service} type="button" disabled={!state?.[service]} aria-pressed={state?.active === service}
       onClick={() => window.dispatchEvent(new CustomEvent("restaurant-order-service-change", { detail: { businessId, service } }))}
       className="rounded-full px-3 py-2 disabled:opacity-40"

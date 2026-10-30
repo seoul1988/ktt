@@ -421,6 +421,31 @@ export default function RestaurantMenu({
     };
   }, [businessId, activeService, effectivePickupEnabled, effectiveDeliveryEnabled, cartItems, data]);
 
+  const [headerModesVisible, setHeaderModesVisible] = useState(false);
+  useEffect(() => {
+    let frame = 0;
+    const check = () => {
+      const visible = Array.from(document.querySelectorAll<HTMLElement>("[data-header-order-modes]"))
+        .some(element => element.dataset.headerOrderModes === String(businessId)
+          && element.getClientRects().length > 0
+          && getComputedStyle(element).visibility !== "hidden");
+      setHeaderModesVisible(previous => previous === visible ? previous : visible);
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(check);
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "data-header-order-modes"] });
+    window.addEventListener("resize", schedule);
+    check();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [businessId]);
+
   const activeOrderEnabled =
     (activeService === "pickup" && effectivePickupEnabled) ||
     (activeService === "delivery" && effectiveDeliveryEnabled);
@@ -1492,7 +1517,7 @@ export default function RestaurantMenu({
             background: transparent !important; padding: 0; font-size: 24px;
           }
       `}</style>
-      {orderingAvailable ? (
+      {orderingAvailable && (!headerModesVisible || orderingClosed || customerTrackingUrl || changeLocationHref) ? (
         <div
           className={`border-b px-3 py-2 sm:px-5 ${
             isBunsMenu
@@ -1523,7 +1548,7 @@ export default function RestaurantMenu({
               </button>
             ) : null}
 
-            {effectivePickupEnabled ? (
+            {effectivePickupEnabled && !headerModesVisible ? (
               <button
                 type="button"
                 data-service-choice
@@ -1544,7 +1569,7 @@ export default function RestaurantMenu({
               </button>
             ) : null}
 
-            {effectiveDeliveryEnabled ? (
+            {effectiveDeliveryEnabled && !headerModesVisible ? (
               <button
                 type="button"
                 data-service-choice
