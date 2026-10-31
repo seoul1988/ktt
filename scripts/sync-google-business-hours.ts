@@ -18,6 +18,6 @@ async function main(){
   console.log(`Group ${shard}: ${JSON.stringify(result)}`);
  }
  console.log(`Total: ${JSON.stringify(total)}`);
- if(incomplete||(total.error_preserved||0)>0)throw new Error('Some businesses could not be synchronized. Existing hours were preserved. Review results and retry if needed.');
+ if(incomplete||(total.error_preserved||0)>0||(total.database_error||0)>0)throw new Error('Some businesses could not be synchronized. Existing hours were preserved. Review results and retry if needed.');
 }
 main().catch(error=>{console.error(error instanceof Error?error.message:'Google hours sync failed');process.exitCode=1;});
