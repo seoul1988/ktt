@@ -2077,6 +2077,10 @@ export default function OwnerBusinessMenuPage() {
           `template-${Date.now()}-${templateIndex}`,
         name: String(template?.name || `Option ${templateIndex + 1}`),
         description: String((template as any)?.description || "").trim(),
+        receiptPrintOrder: (() => {
+          const value = Number(template?.receiptPrintOrder);
+          return template?.receiptPrintOrder != null && Number.isInteger(value) && value > 0 ? value : 999;
+        })(),
         required: Boolean(template?.required),
         minSelect: Math.max(
           0,
@@ -2286,8 +2290,15 @@ export default function OwnerBusinessMenuPage() {
           existing.options.length === 0 ? template.minSelect : existing.minSelect,
         maxSelect:
           existing.options.length === 0 ? template.maxSelect : existing.maxSelect,
-        receiptPrintOrder:
-          existing.receiptPrintOrder ?? template.receiptPrintOrder ?? existingIndex + 1,
+        receiptPrintOrder: (() => {
+          const existingOrder = Number(existing.receiptPrintOrder);
+          const incomingOrder = Number(template.receiptPrintOrder);
+          const existingValid = Number.isInteger(existingOrder) && existingOrder > 0 && existingOrder !== 999;
+          const incomingValid = Number.isInteger(incomingOrder) && incomingOrder > 0 && incomingOrder !== 999;
+          if (incomingValid && (String(template.id).startsWith("db-") || !existingValid)) return incomingOrder;
+          if (existingValid) return existingOrder;
+          return existing.receiptPrintOrder ?? template.receiptPrintOrder ?? 999;
+        })(),
         subOptionGroupNo:
           existing.subOptionGroupNo ?? template.subOptionGroupNo ?? null,
         isSubOptionOnly:
@@ -2368,58 +2379,46 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
-  function updateOptionTemplateReceiptPrintOrder(
-    templateId: string,
-    templateName: string,
-    value: number | "",
-  ) {
-    // 입력 중에는 빈 값을 허용합니다.
-    // 그래서 Backspace로 기존 숫자를 완전히 지운 뒤 새 숫자를 입력할 수 있습니다.
-    if (value === "") {
-      persistOptionTemplates(
-        optionTemplates.map((template) =>
-          template.id === templateId
-            ? { ...template, receiptPrintOrder: "" }
-            : template,
-        ),
-      );
+  function updateOptionTemplateReceiptPrintOrder(templateId: string, _name: string, value: number | "") {
+    persistOptionTemplates(optionTemplates.map(template => template.id === templateId
+      ? { ...template, receiptPrintOrder: value === "" ? "" : Math.max(1, Math.floor(Number(value) || 1)) }
+      : template));
+    setMessage("순서 번호를 입력한 뒤 옆의 ‘번호 저장’을 눌러주세요.");
+  }
+
+  async function saveOptionTemplateReceiptPrintOrder(template: MenuOptionTemplate) {
+    const order = Number(template.receiptPrintOrder);
+    if (template.receiptPrintOrder === "" || !Number.isInteger(order) || order < 1 || order > 99999) {
+      setMessage("1~99999 사이의 순서 번호를 입력하세요.");
       return;
     }
-
-    const receiptPrintOrder = Math.max(1, Math.floor(Number(value) || 1));
-
-    const nextTemplates = optionTemplates.map((template) =>
-      template.id === templateId
-        ? { ...template, receiptPrintOrder }
-        : template,
-    );
-    persistOptionTemplates(nextTemplates);
-
-    const templateKey = templateName.trim().toLowerCase();
-    const changedItemIds: number[] = [];
-
-    const nextItems = itemsRef.current.map((item) => {
-        const currentGroups = normalizeOptionGroups(item);
-        let changed = false;
-        const nextGroups = currentGroups.map((group) => {
-          if (group.name.trim().toLowerCase() !== templateKey) return group;
-          changed = true;
-          return { ...group, receiptPrintOrder };
-        });
-        if (!changed) return item;
-        changedItemIds.push(item.id);
-        return {
-          ...item,
-          option_groups: nextGroups,
-          optionGroups: nextGroups,
-          menu_option_groups: nextGroups,
-        };
+    setMessage(`‘${template.name}’ 순서 ${order}번 서버 저장 중...`);
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(`/api/owner/business/${businessId}/menu`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "set_option_group_order", name: template.name,
+          receiptPrintOrder: order, template: { required: template.required, minSelect: template.minSelect, maxSelect: template.maxSelect } }),
       });
-    itemsRef.current = nextItems;
-    setItems(nextItems);
-
-    changedItemIds.forEach((itemId) => scheduleItemAutoSave(itemId));
-    setMessage(`✓ 영수증 출력 순서 ${receiptPrintOrder}번으로 저장합니다.`);
+      const result = await readApiJson(response);
+      if (!response.ok) throw new Error(result?.error || "번호 저장 실패");
+      const key = template.name.trim().toLowerCase();
+      const nextItems = itemsRef.current.map(item => {
+        const groups = normalizeOptionGroups(item).map(group => group.name.trim().toLowerCase() === key
+          ? { ...group, receiptPrintOrder: order } : group);
+        return { ...item, option_groups: groups, optionGroups: groups, menu_option_groups: groups };
+      });
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      setOptionTemplates(current => {
+        const next = current.map(row => row.name.trim().toLowerCase() === key ? { ...row, receiptPrintOrder: order } : row);
+        window.localStorage.setItem(`ktown-menu-option-templates:${businessId}`, JSON.stringify(next));
+        return next;
+      });
+      setMessage(`✓ ‘${template.name}’ ${order}번 서버 저장 완료 / 적용 그룹 ${Number(result.updatedMenuGroups) || 0}개`);
+    } catch (error) {
+      setMessage(`번호 저장 실패: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   function updateOptionTemplateDescription(
@@ -6981,7 +6980,7 @@ export default function OwnerBusinessMenuPage() {
                           key={`quick-library-${template.id}`}
                           className="rounded-xl border border-blue-100 bg-white p-3"
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
                             <p className="min-w-0 flex-1 text-sm font-black text-[#172033]">
                               {template.name}
                             </p>
@@ -7010,6 +7009,8 @@ export default function OwnerBusinessMenuPage() {
                                   className="w-16 rounded-md border border-blue-200 bg-white px-2 py-0.5 text-center text-[10px] font-black text-blue-800 outline-none focus:border-blue-500"
                                   aria-label={`${template.name} 영수증 출력 순서`}
                                 />
+                                <button type="button" onClick={(event) => { event.stopPropagation(); void saveOptionTemplateReceiptPrintOrder(template); }}
+                                  className="rounded-md bg-blue-600 px-2 py-1 text-[10px] font-black text-white">번호 저장</button>
                               </label>
                               <button
                                 type="button"

@@ -978,6 +978,45 @@ export async function PATCH(
       return NextResponse.json({ error: "옵션 수량 설정 DB 준비가 필요합니다. 동봉된 SQL을 먼저 실행하세요." }, { status: 503 });
     }
 
+    if (body?.action === "set_option_group_order") {
+      const name = String(body?.name || "").trim();
+      const order = Number(body?.receiptPrintOrder);
+      if (!name || !Number.isInteger(order) || order < 1 || order > 99999) {
+        return NextResponse.json({ error: "옵션 이름과 1~99999 사이의 순서 번호를 입력하세요." }, { status: 400 });
+      }
+      const key = name.toLowerCase();
+      const { data: libraryRows, error: libraryError } = await supabase.from("menu_option_groups")
+        .select("id,name,receipt_print_order").eq("business_id", businessId).eq("active", true);
+      if (libraryError) throw libraryError;
+      const matches = (libraryRows || []).filter(row => String(row.name).trim().toLowerCase() === key);
+      if (matches.length) {
+        const { error } = await supabase.from("menu_option_groups").update({ receipt_print_order: order })
+          .eq("business_id", businessId).in("id", matches.map(row => Number(row.id)));
+        if (error) throw error;
+      } else {
+        // Imported groups may exist only as per-menu copies. Create their shared order record.
+        const template = body?.template || {};
+        const minimum = Math.max(0, Math.floor(Number(template.minSelect) || 0));
+        const maximum = template.maxSelect == null ? null : Math.max(minimum, Math.floor(Number(template.maxSelect) || 0));
+        const { error } = await supabase.from("menu_option_groups").insert({
+          business_id: businessId, name, required: template.required === true, min_select: minimum,
+          max_select: maximum, sort_order: 999, receipt_print_order: order, active: true,
+          is_sub_option_only: false, sub_option_group_no: null,
+        });
+        if (error) throw error;
+      }
+      const { data: menuGroups, error: menuError } = await supabase.from("business_menu_option_groups")
+        .select("id,name").eq("business_id", businessId);
+      if (menuError) throw menuError;
+      const ids = (menuGroups || []).filter(row => String(row.name).trim().toLowerCase() === key).map(row => Number(row.id));
+      if (ids.length) {
+        const { error } = await supabase.from("business_menu_option_groups").update({ receipt_print_order: order })
+          .eq("business_id", businessId).in("id", ids);
+        if (error) throw error;
+      }
+      return NextResponse.json({ success: true, receiptPrintOrder: order, updatedMenuGroups: ids.length });
+    }
+
     if (body?.action === "set_sub_option_quantities") {
       const groupNo = Number(body?.subOptionGroupNo);
       const choices = body?.choices;
@@ -1008,6 +1047,17 @@ export async function PATCH(
         if (error) throw error;
       }
       return NextResponse.json({ ok: true, updatedChoices: choices.length });
+    }
+
+    // Shared order is authoritative: stale item autosaves must not reset it to 999.
+    const { data: savedOrders, error: savedOrdersError } = await supabase.from("menu_option_groups")
+      .select("name,receipt_print_order").eq("business_id", businessId).eq("active", true);
+    if (savedOrdersError) throw savedOrdersError;
+    const authoritativeOrders = new Map<string, number>();
+    for (const row of savedOrders || []) {
+      const value = Number(row.receipt_print_order);
+      if (row.receipt_print_order != null && Number.isInteger(value) && value > 0 && value !== 999)
+        authoritativeOrders.set(String(row.name).trim().toLowerCase(), value);
     }
 
     let updatedCategories = 0;
@@ -1380,7 +1430,7 @@ export async function PATCH(
             min_select: minSelect,
             max_select: maxSelect,
             display_order: groupIndex,
-            receipt_print_order: receiptPrintOrder,
+            receipt_print_order: authoritativeOrders.get(groupName.toLowerCase()) ?? receiptPrintOrder,
             sub_option_group_no:
               subOptionGroupNo == null
                 ? null
