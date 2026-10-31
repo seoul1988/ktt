@@ -7399,7 +7399,7 @@ export default function OwnerBusinessMenuPage() {
                     templateOptionsInput.map((option, optionIndex) => (
                       <div
                         key={`template-option-${optionIndex}`}
-                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_96px_150px_110px_120px_110px_auto_auto]"
+                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 grid-cols-2 sm:grid-cols-4"
                       >
                         <input
                           value={option.name}
@@ -7409,7 +7409,7 @@ export default function OwnerBusinessMenuPage() {
                             })
                           }
                           placeholder="옵션 이름"
-                          className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold outline-none"
+                          className="col-span-full w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold outline-none"
                         />
 
                         <div className="relative">
@@ -9825,7 +9825,7 @@ export default function OwnerBusinessMenuPage() {
                                       ) => (
                                         <div
                                           key={`${item.id}-${groupIndex}-${optionIndex}`}
-                                          className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[1fr_120px_155px_110px_auto_auto]"
+                                          className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 grid-cols-2 sm:grid-cols-4"
                                         >
                                           <input
                                             value={option.name}
@@ -9840,7 +9840,7 @@ export default function OwnerBusinessMenuPage() {
                                               )
                                             }
                                             placeholder="옵션 이름"
-                                            className="min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold outline-none focus:border-[#172033]"
+                                            className="col-span-full w-full min-w-0 min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold outline-none focus:border-[#172033]"
                                           />
 
                                           <div className="relative">
