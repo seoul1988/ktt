@@ -2264,17 +2264,36 @@ export default function OwnerBusinessMenuPage() {
         const optionName = option.name.trim().toLowerCase();
         const optionPrice = Number(option.priceDelta || 0).toFixed(2);
 
-        const alreadyExists = mergedOptions.some(
+        const matchedIndex = mergedOptions.findIndex(
           (row) =>
             row.name.trim().toLowerCase() === optionName &&
             Number(row.priceDelta || 0).toFixed(2) === optionPrice,
         );
 
-        if (!alreadyExists) {
+        if (matchedIndex === -1) {
           mergedOptions.push({
             ...option,
             displayOrder: mergedOptions.length,
           });
+        } else {
+          // 메뉴에 저장된 연결을 오래된 로컬/공용 옵션의 OFF 값으로 가리지 않습니다.
+          // 이름과 가격이 같은 항목도 연결 설정을 병합해야 합니다.
+          const existingOption = mergedOptions[matchedIndex];
+          const incomingNo = Number(option.subOptionGroupNo);
+          const existingNo = Number(existingOption.subOptionGroupNo);
+          const incomingLinked = option.useSubOption === true &&
+            Number.isInteger(incomingNo) && incomingNo > 0;
+          const existingLinked = existingOption.useSubOption === true &&
+            Number.isInteger(existingNo) && existingNo > 0;
+          const incomingPersisted = /^(existing-|db-)/.test(String(template.id));
+
+          if (incomingLinked && (!existingLinked || incomingPersisted)) {
+            mergedOptions[matchedIndex] = {
+              ...existingOption,
+              useSubOption: true,
+              subOptionGroupNo: incomingNo,
+            };
+          }
         }
       }
 
