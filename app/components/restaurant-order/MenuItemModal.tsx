@@ -183,6 +183,32 @@ function selectionStatesEqual(
   return true;
 }
 
+function CollapsibleSubOptions({ group, groupIndex, quantities, onSetQuantity }: {
+  group: ReturnType<typeof getOptionGroups>[number];
+  groupIndex: number;
+  quantities: Record<string, number>;
+  onSetQuantity: (index: number, quantity: number) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const count = Object.values(quantities).reduce((sum, value) => sum + toSafeInteger(value), 0);
+  const { maximum } = getGroupRules(group);
+  useEffect(() => {
+    setCollapsed(maximum != null && maximum > 0 && count >= maximum);
+  }, [count, maximum]);
+  const summary = group.options.map((option, index) => {
+    const quantity = toSafeInteger(quantities[optionKey(option, index)]);
+    return quantity > 0 ? `${option.name}${quantity > 1 ? ` ×${quantity}` : ""}` : "";
+  }).filter(Boolean).join(", ");
+  return <div>
+    <button type="button" className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>
+      <span className="text-sm font-bold text-red-600">{group.name}</span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500 text-white" aria-hidden="true">{collapsed ? "⌄" : "⌃"}</span>
+    </button>
+    {summary ? <p className="mt-2 text-xs text-gray-700">{summary}</p> : null}
+    {!collapsed ? <MenuOptionGroup group={group} groupIndex={groupIndex} quantities={quantities} onSetQuantity={onSetQuantity} /> : null}
+  </div>;
+}
+
 export default function MenuItemModal({
   item,
   backgroundColor,
@@ -341,6 +367,22 @@ export default function MenuItemModal({
         delete next[gKey];
       }
 
+      // 부모를 해제하거나 같은 그룹의 다른 항목으로 바꾸면 이전 자식 선택을 즉시 제거합니다.
+      // 같은 SUB 번호를 참조하는 부모로 바꿀 때에도 이전 선택을 넘기지 않습니다.
+      if (!group.isSubOptionOnly) {
+        group.options.forEach((previousOption, previousIndex) => {
+          const previousKey = optionKey(previousOption, previousIndex);
+          if (!previousOption.useSubOption || !previousOption.subOptionGroupNo ||
+              toSafeInteger(currentGroup[previousKey]) <= 0 ||
+              toSafeInteger(nextGroup[previousKey]) > 0) return;
+          groups.forEach((child, childIndex) => {
+            if (child.isSubOptionOnly && child.subOptionGroupNo === previousOption.subOptionGroupNo) {
+              delete next[groupKey(child, childIndex)];
+            }
+          });
+        });
+      }
+
       /*
        * 마지막으로 한 번 더 전체 그룹을 normalize.
        * 어떠한 호출 경로에서도 maximum 초과 state가 저장되지 않는다.
@@ -431,6 +473,7 @@ export default function MenuItemModal({
 
   const optionExtra = groups.reduce(
     (groupTotal, group, groupIndex) => {
+      if (group.isSubOptionOnly && !activeChildGroupIndexes.has(groupIndex)) return groupTotal;
       const values =
         safeSelections[groupKey(group, groupIndex)] || {};
 
@@ -638,7 +681,7 @@ export default function MenuItemModal({
 
             return (
               <div
-                key={`sub-option-${childKey}`}
+                key={`sub-option-${parentIndex}-${optionIndex}-${childKey}`}
                 className="rounded-xl border border-violet-200 bg-violet-50/80 p-3"
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -658,7 +701,7 @@ export default function MenuItemModal({
                   </span>
                 </div>
 
-                <MenuOptionGroup
+                <CollapsibleSubOptions
                   group={group}
                   groupIndex={originalIndex}
                   quantities={safeSelections[childKey] || {}}
