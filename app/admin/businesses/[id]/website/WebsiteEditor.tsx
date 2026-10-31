@@ -20,6 +20,47 @@ import type { RestaurantTemplateId } from "@/lib/website/restaurant-templates";
 import { isTemplateDocument, bindTemplateDocument } from "@/lib/website/template-document";
 import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 
+// Preserve the browser selection and Korean IME composition during live preview updates.
+function StableCellTextInput({ html, onHtmlChange, className }: {
+  html: string;
+  onHtmlChange: (html: string) => void;
+  className?: string;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const composingRef = useRef(false);
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || composingRef.current || document.activeElement === editor) return;
+    if (editor.innerHTML !== html) editor.innerHTML = html;
+  }, [html]);
+  function publish(editor: HTMLDivElement) {
+    onHtmlChange(sanitizeCellRichTextHtml(editor.innerHTML));
+  }
+  return <div
+    ref={editorRef}
+    contentEditable
+    suppressContentEditableWarning
+    dir="ltr"
+    role="textbox"
+    aria-label="글 내용"
+    aria-multiline="true"
+    className={className}
+    onCompositionStart={() => { composingRef.current = true; }}
+    onCompositionEnd={(event) => {
+      composingRef.current = false;
+      publish(event.currentTarget);
+    }}
+    onInput={(event) => {
+      if (composingRef.current || (event.nativeEvent as InputEvent).isComposing) return;
+      publish(event.currentTarget);
+    }}
+    onBlur={(event) => {
+      if (composingRef.current) return;
+      publish(event.currentTarget);
+    }}
+  />;
+}
+
 // KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
 // inline 이미지의 baseline 때문에 생기는 3~4px 하단 틈을 방지합니다.
 
@@ -13294,21 +13335,14 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                               ✎ 편집기
                             </button>
                           </div>
-                          <div
+                          <StableCellTextInput
                             key={`${selectedCell.id}-${device}`}
-                            contentEditable
-                            suppressContentEditableWarning
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                sanitizeCellRichTextHtml(
-                                  String(selectedCell.rich_text_html || ""),
-                                ) ||
-                                escapeCellText(String(selectedCell.text || "")),
-                            }}
-                            onInput={(event) => {
-                              const html = sanitizeCellRichTextHtml(
-                                event.currentTarget.innerHTML,
-                              );
+                            html={
+                              sanitizeCellRichTextHtml(
+                                String(selectedCell.rich_text_html || ""),
+                              ) || escapeCellText(String(selectedCell.text || ""))
+                            }
+                            onHtmlChange={(html) => {
                               updateCell(
                                 selection.area as "header" | "hero",
                                 selectedCell.id,
