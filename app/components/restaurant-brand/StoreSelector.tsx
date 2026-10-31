@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { coordinates, distanceMiles, orderLink, type BrandStore } from "@/lib/restaurant-brand/brand";
 
 const StoreMap = dynamic(() => import("./StoreMap"), {
@@ -14,6 +14,12 @@ export default function StoreSelector({ stores, brand, initialService }: {
   stores: BrandStore[]; brand: string; initialService: string;
 }) {
   const [service, setService] = useState(initialService === "delivery" ? "delivery" : "pickup");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const cards = useRef(new Map<number, HTMLElement>());
+  function selectStore(id: number) {
+    setSelectedId(id);
+    cards.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState<[number, number] | null>(null);
   const [locationMessage, setLocationMessage] = useState("");
@@ -50,7 +56,7 @@ export default function StoreSelector({ stores, brand, initialService }: {
       <div className="grid min-w-0 grid-cols-1 lg:h-[calc(100dvh-132px)] lg:min-h-[520px] lg:grid-cols-[390px_minmax(0,1fr)]">
         <section aria-label="Store locations map"
           className="relative isolate z-0 col-start-1 row-start-1 h-[clamp(240px,40dvh,380px)] min-w-0 border-b lg:col-start-2 lg:h-full lg:border-b-0">
-          <StoreMap stores={displayed.map(item => item.store)} brand={brand} service={service} />
+          <StoreMap stores={displayed.map(item => item.store)} brand={brand} service={service} selectedId={selectedId} onSelect={selectStore} location={location} />
         </section>
         <aside className="col-start-1 row-start-2 min-w-0 p-4 lg:row-start-1 lg:overflow-y-auto lg:border-r lg:p-5">
           <div className="grid grid-cols-2 rounded-full bg-slate-100 p-1">
@@ -73,6 +79,10 @@ export default function StoreSelector({ stores, brand, initialService }: {
           <div role="region" aria-label="Choose a store" tabIndex={0}
             className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 lg:mt-0 lg:block lg:overflow-visible lg:pb-0">
             {displayed.map(({ store, distance }) => <article key={store.id}
+              ref={node => { if (node) cards.current.set(store.id, node); else cards.current.delete(store.id); }}
+              onClick={() => setSelectedId(store.id)}
+              aria-label={`${store.name}${selectedId === store.id ? ", selected" : ""}`}
+              style={selectedId === store.id ? { backgroundColor: "#fff4ed", boxShadow: "inset 0 0 0 2px #b64032" } : undefined}
               className="flex w-[86%] max-w-[360px] shrink-0 snap-start flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:w-auto lg:max-w-none lg:rounded-none lg:border-0 lg:border-b lg:py-5 lg:px-0 lg:shadow-none">
               <h2 className="font-black">{store.name}</h2>
               <p className="mt-2 text-sm text-slate-600">{store.address}</p>
@@ -91,3 +101,4 @@ export default function StoreSelector({ stores, brand, initialService }: {
     </main>
   );
 }
+

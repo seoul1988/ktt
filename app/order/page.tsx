@@ -55,7 +55,7 @@ export default async function BrandOrderPage({ searchParams }: {
     return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-black">Choose a restaurant</h1><p className="mt-3">Please use the restaurant’s online order link.</p></main>;
   }
   const { data, error } = await supabaseAdmin.from("businesses")
-    .select("id,name,address,phone,lat,lng,hours,image_url,brand_code")
+    .select("id,name,address,phone,lat,lng,hours,image_url,logo_url,brand_code")
     .eq("brand_code", brand).or("hidden.is.null,hidden.eq.false").order("name");
   if (error) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-black">Online ordering is temporarily unavailable</h1><p className="mt-3">Please try again shortly or contact the restaurant.</p></main>;
   const stores = (data || []) as BrandStore[];
@@ -66,3 +66,4 @@ export default async function BrandOrderPage({ searchParams }: {
   return <SelectedStoreMenu id={selected.id} name={selected.name || "Restaurant"} address={selected.address}
     changeLocation={stores.length > 1 ? orderLink(brand, undefined, service) : undefined} />;
 }
+
