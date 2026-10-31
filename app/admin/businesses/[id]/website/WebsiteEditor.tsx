@@ -7512,6 +7512,15 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   }, [businessId]);
 
   useEffect(() => {
+    function handleNestedTextEditorState(event: Event) {
+      const isOpen = (event as CustomEvent<{ open?: boolean }>).detail?.open === true;
+      setCellEditPanelCollapsed(isOpen);
+    }
+    window.addEventListener("website-builder-text-editor-state", handleNestedTextEditorState);
+    return () => window.removeEventListener("website-builder-text-editor-state", handleNestedTextEditorState);
+  }, []);
+
+  useEffect(() => {
     const handleNestedImageEditorState = (event: Event) => {
       const customEvent = event as CustomEvent<{ open?: boolean }>;
       const isOpen = customEvent.detail?.open === true;
@@ -25514,6 +25523,16 @@ function RightPanel(props: {
   }, [imageEditorOpen]);
   const [snsEditorOpen, setSnsEditorOpen] = useState(false);
   const [textEditorOpen, setTextEditorOpen] = useState(false);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("website-builder-text-editor-state", {
+      detail: { open: textEditorOpen },
+    }));
+    return () => {
+      if (textEditorOpen) window.dispatchEvent(new CustomEvent("website-builder-text-editor-state", {
+        detail: { open: false },
+      }));
+    };
+  }, [textEditorOpen]);
   const [mapEditorOpen, setMapEditorOpen] = useState(false);
   const [mapEditorTitle, setMapEditorTitle] = useState("LOCATION");
   const [mapEditorAddress, setMapEditorAddress] = useState("");
