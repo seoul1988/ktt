@@ -63,7 +63,7 @@ function withServicePrice(
 }
 
 type Props = {
-  menuStyle?: "tabs" | "pills";
+  menuStyle?: "tabs" | "pills" | "cards";
   categoryUnderlineColor?: string;
   businessId: number;
   changeLocationHref?: string;
@@ -1651,14 +1651,14 @@ export default function RestaurantMenu({
       >
         {hasConfiguredPopularPicks && featuredItems.length > 0 ? (
           <section aria-label="Popular picks" className="mb-5 min-w-0 border-b border-white/10 pb-5">
-            <h2 className="mb-3 text-xl font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || undefined }}>
+            <h2 className="mb-3 text-xl font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || (menuStyle === "cards" ? "#183b65" : undefined) }}>
               Popular Picks
             </h2>
             <div
               role="region"
               aria-label="Popular menu items — swipe to explore"
               tabIndex={0}
-              className="grid grid-flow-col auto-cols-[62%] gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory pb-2 sm:auto-cols-[44%] lg:grid-flow-row lg:auto-cols-auto lg:grid-cols-3 lg:overflow-visible"
+              className={menuStyle === "cards" ? `grid grid-cols-1 gap-5 ${compact ? "" : "sm:grid-cols-2 xl:grid-cols-4"}` : "grid grid-flow-col auto-cols-[62%] gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory pb-2 sm:auto-cols-[44%] lg:grid-flow-row lg:auto-cols-auto lg:grid-cols-3 lg:overflow-visible"}
             >
               {featuredItems.map((item) => {
                 const category = visibleCategories.find((entry) => entry.id === item.category_id);
@@ -1674,9 +1674,9 @@ export default function RestaurantMenu({
                     }}
                     className="group flex min-w-0 snap-start flex-col overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
                     style={{
-                      backgroundColor: cardBackgroundColor || "rgba(255,255,255,0.055)",
+                      backgroundColor: cardBackgroundColor || (menuStyle === "cards" ? "#ffffff" : "rgba(255,255,255,0.055)"),
                       borderColor: cardBorderColor || "rgba(255,255,255,0.12)",
-                      color: nameColor || "#ffffff",
+                      color: nameColor || (menuStyle === "cards" ? "#ff333b" : "#ffffff"),
                     }}
                   >
                     {imageUrl ? (
@@ -1685,7 +1685,7 @@ export default function RestaurantMenu({
                     <div className="flex flex-1 flex-col p-3 sm:p-4">
                       <h3 className="line-clamp-2 text-sm font-black leading-snug sm:text-base">{item.name}</h3>
                       <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-                        <span className="text-sm font-black" style={{ color: priceColor || "#fbbf24" }}>
+                        <span className="text-sm font-black" style={{ color: priceColor || (menuStyle === "cards" ? "#ff333b" : "#fbbf24") }}>
                           {price != null ? `$${Number(price).toFixed(2)}` : ""}
                         </span>
                         {orderingAvailable ? (
@@ -1733,7 +1733,7 @@ export default function RestaurantMenu({
                       className="block h-10 w-1.5 shrink-0 rounded-full"
                       style={{ backgroundColor: accent }}
                     />
-                    <h2 className="text-[22px] font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || undefined }}>
+                    <h2 className="text-[22px] font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || (menuStyle === "cards" ? "#183b65" : undefined) }}>
                       {category.name}
                     </h2>
                   </div>
@@ -1741,7 +1741,7 @@ export default function RestaurantMenu({
                   <h2
                     data-category-section-heading
                     className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
-                    style={{ backgroundColor, color: categoryHeadingColor || undefined }}
+                    style={{ backgroundColor, color: categoryHeadingColor || (menuStyle === "cards" ? "#183b65" : undefined) }}
                   >
                     {category.name}
                   </h2>
@@ -1749,9 +1749,9 @@ export default function RestaurantMenu({
               })()}
 
               <div
-                className={`grid grid-cols-1 gap-3 ${
-                  compact ? "" : "lg:grid-cols-2"
-                }`}
+                className={menuStyle === "cards"
+                  ? `grid grid-cols-1 gap-5 ${compact ? "" : "sm:grid-cols-2 xl:grid-cols-4"}`
+                  : `grid grid-cols-1 gap-3 ${compact ? "" : "lg:grid-cols-2"}`}
               >
                 {items.map((item) => {
                   const hasImage = Boolean(
@@ -1759,6 +1759,22 @@ export default function RestaurantMenu({
                       item.image_url,
                   );
 
+                  if (menuStyle === "cards") return (
+                    <button key={item.id} type="button"
+                      onClick={() => { recordMenuItemClick(item, category.name); setSelectedItem(withServicePrice(item, activeService)); }}
+                      className="group flex w-full flex-col overflow-hidden rounded-lg border text-left shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                      style={{ backgroundColor: cardBackgroundColor || "#ffffff", borderColor: cardBorderColor || "#b8c5d6" }}>
+                      {hasImage ? <img src={item.image_url || item.thumbnail_url || ""} alt={item.name} loading="lazy" className="aspect-[2/1] w-full object-cover" /> : null}
+                      <div className="min-h-[78px] w-full p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="text-sm font-bold leading-snug" style={{ color: nameColor || "#ff333b" }}>{item.name}</h3>
+                          {getPriceForService(item, activeService) != null ? <span className="shrink-0 text-sm font-bold" style={{ color: priceColor || "#ff333b" }}>${Number(getPriceForService(item, activeService)).toFixed(2)}</span> : null}
+                        </div>
+                        {item.description ? <p className="mt-1 text-xs leading-snug" style={{ color: descriptionColor || "#183b65" }}>{item.description}</p> : null}
+                        {getPromotionsForMenuItem(item.id).length ? <span className="mt-2 inline-block rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">DEAL</span> : null}
+                      </div>
+                    </button>
+                  );
                   return (
                     <button
                       key={item.id}

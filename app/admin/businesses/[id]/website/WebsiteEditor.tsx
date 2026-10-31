@@ -269,7 +269,7 @@ type GridCell = {
   restaurant_menu_menu_enabled?: boolean;
   restaurant_menu_pickup_enabled?: boolean;
   restaurant_menu_delivery_enabled?: boolean;
-  restaurant_menu_style?: "tabs" | "pills";
+  restaurant_menu_style?: "tabs" | "pills" | "cards";
   restaurant_menu_category_underline_color?: string;
   /** 메뉴 카드 색상 설정 */
   restaurant_menu_card_background_color?: string;
@@ -586,7 +586,7 @@ type SectionContent = {
   restaurant_menu_menu_enabled?: boolean;
   restaurant_menu_pickup_enabled?: boolean;
   restaurant_menu_delivery_enabled?: boolean;
-  restaurant_menu_style?: "tabs" | "pills";
+  restaurant_menu_style?: "tabs" | "pills" | "cards";
   restaurant_menu_category_underline_color?: string;
   /** 메뉴 카드 색상 설정 */
   restaurant_menu_card_background_color?: string;
@@ -24432,6 +24432,30 @@ async function compressLinkPageImage(file: File) {
   return new File([blob], `${baseName}.webp`, { type: "image/webp" });
 }
 
+function RestaurantMenuDesignPicker({ value, onChange }: {
+  value?: "tabs" | "pills" | "cards";
+  onChange: (style: "tabs" | "pills" | "cards") => void;
+}) {
+  return <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
+    <p className="mb-3 text-sm font-black text-gray-950">레스토랑 메뉴 스타일 선택</p>
+    <div className="grid grid-cols-2 gap-3">
+      {(["tabs", "cards"] as const).map((style, index) => (
+        <button key={style} type="button" aria-pressed={style === "cards" ? value === "cards" : value !== "cards"}
+          onClick={() => onChange(style === "tabs" && value === "pills" ? "pills" : style)}
+          className={`rounded-xl border-2 p-3 text-left ${((style === "cards") === (value === "cards")) ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"}`}>
+          <div aria-hidden="true" className={`mb-2 grid gap-2 ${index ? "grid-cols-2" : "grid-cols-1"}`}>
+            {[1,2].map(n => <div key={n} className={`overflow-hidden rounded border border-gray-200 bg-white ${index ? "flex flex-col" : "flex flex-row-reverse"}`}>
+              <div className={`flex items-center justify-center bg-orange-100 ${index ? "h-16 w-full" : "h-12 w-12 shrink-0"}`}>🍽</div>
+              <div className="flex-1 p-2"><div className="h-1.5 w-3/4 rounded bg-gray-400"/><div className="mt-2 h-1 w-full rounded bg-gray-200"/></div>
+            </div>)}
+          </div>
+          <span className="block text-xs font-black text-gray-950">스타일 {index + 1} · {index ? "큰 사진 카드형" : "현재 스타일"}</span>
+        </button>
+      ))}
+    </div>
+  </div>;
+}
+
 type RestaurantMenuEditorSettings = Pick<GridCell,
   "restaurant_menu_menu_enabled" |
   "restaurant_menu_pickup_enabled" |
@@ -24607,11 +24631,13 @@ function RestaurantMenuSettingsEditor({ businessId, cell: savedCell, onUpdate }:
 
           <div className="mt-4 rounded-xl border border-orange-200 bg-white p-3">
             <p className="mb-3 text-sm font-black text-gray-900">메뉴 스타일·색상 설정</p>
+            <RestaurantMenuDesignPicker value={cell.restaurant_menu_style} onChange={(style) => onUpdate({ restaurant_menu_style: style })} />
             <label className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-700">
               <span className="min-w-[86px]">메뉴 스타일</span>
               <select value={cell.restaurant_menu_style || "tabs"}
-                onChange={(event) => onUpdate({ restaurant_menu_style: event.target.value === "pills" ? "pills" : "tabs" })}
+                onChange={(event) => onUpdate({ restaurant_menu_style: event.target.value === "cards" ? "cards" : event.target.value === "pills" ? "pills" : "tabs" })}
                 className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-2 text-gray-950">
+                <option value="cards">스타일 2 · 큰 사진 카드형</option>
                 <option value="tabs">간결한 밑줄 탭</option>
                 <option value="pills">둥근 버튼</option>
               </select>
@@ -25539,6 +25565,7 @@ function RightPanel(props: {
 }) {
   const { selection, selectedCell, selectedSection, heroSection, business, websiteSettings } = props;
   const [cellTypePickerOpen, setCellTypePickerOpen] = useState(false);
+  const [restaurantStylePickerOpen, setRestaurantStylePickerOpen] = useState(false);
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [phoneEditorOpen, setPhoneEditorOpen] = useState(false);
 
@@ -29112,21 +29139,7 @@ function RightPanel(props: {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    props.onUpdateCell(
-                      area,
-                      selectedCell.id,
-                      {
-                        type: "title",
-                        display_mode: "restaurant-menu",
-                        text: "Restaurant Menu",
-                        background_color: "#ffffff",
-                        color: "#111827",
-                      },
-                      selection.layoutId,
-                    );
-                    setCellTypePickerOpen(false);
-                  }}
+                  onClick={() => setRestaurantStylePickerOpen(true)}
                   className={`rounded-xl border p-2 text-center ${
                     selectedCell.display_mode === "restaurant-menu"
                       ? "border-orange-500 bg-orange-50 text-orange-700"
@@ -29562,6 +29575,19 @@ function RightPanel(props: {
                   </button>
                 ))}
               </div>
+              {restaurantStylePickerOpen ? (
+                <RestaurantMenuDesignPicker
+                  value={selectedCell.restaurant_menu_style}
+                  onChange={(style) => {
+                    props.onUpdateCell(area, selectedCell.id, {
+                      type: "title", display_mode: "restaurant-menu", text: "Restaurant Menu",
+                      background_color: "#ffffff", color: "#111827", restaurant_menu_style: style,
+                    }, selection.layoutId);
+                    setRestaurantStylePickerOpen(false);
+                    setCellTypePickerOpen(false);
+                  }}
+                />
+              ) : null}
             </div>
           ) : null}
         </div>
