@@ -24404,10 +24404,58 @@ type RestaurantMenuEditorSettings = Pick<GridCell,
   "restaurant_menu_area_background_color"
 >;
 
-function RestaurantMenuSettingsEditor({ cell, onUpdate }: {
+function RestaurantMenuSettingsEditor({ businessId, cell: savedCell, onUpdate }: {
+  businessId: string | number;
   cell: RestaurantMenuEditorSettings;
   onUpdate: (patch: Partial<RestaurantMenuEditorSettings>) => void;
 }) {
+  const [modes, setModes] = useState<Partial<RestaurantMenuEditorSettings>>({});
+  const [modesReady, setModesReady] = useState(false);
+  const [modesSaving, setModesSaving] = useState(false);
+  const [modesMessage, setModesMessage] = useState("");
+  const modesBusyRef = useRef(false);
+  const cell = { ...savedCell, ...modes };
+  useEffect(() => {
+    let cancelled = false;
+    setModesReady(false);
+    setModes({});
+    fetch(`/api/admin/businesses/${businessId}/menu-modes`, { cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "주문 방식 불러오기 실패");
+        if (cancelled) return;
+        setModes(payload.modes);
+        setModesReady(true);
+        setModesMessage("");
+      })
+      .catch(error => { if (!cancelled) setModesMessage(error instanceof Error ? error.message : "주문 방식 불러오기 실패"); });
+    return () => { cancelled = true; };
+  }, [businessId]);
+  async function saveModes(patch: Partial<RestaurantMenuEditorSettings>) {
+    if (modesBusyRef.current || !modesReady) return;
+    modesBusyRef.current = true;
+    setModesSaving(true);
+    setModesMessage("저장 중...");
+    try {
+      const response = await fetch(`/api/admin/businesses/${businessId}/menu-modes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "주문 방식 저장 실패");
+      setModes(payload.modes);
+      onUpdate(payload.modes);
+      setModesMessage("주문 방식이 저장되었습니다.");
+      // RestaurantMenu already refreshes its authoritative order settings on focus.
+      window.dispatchEvent(new Event("focus"));
+    } catch (error) {
+      setModesMessage(error instanceof Error ? error.message : "주문 방식 저장 실패");
+    } finally {
+      modesBusyRef.current = false;
+      setModesSaving(false);
+    }
+  }
   return (
         <div className="mt-4 rounded-2xl border-2 border-orange-400 bg-orange-50 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
@@ -24454,6 +24502,7 @@ function RestaurantMenuSettingsEditor({ cell, onUpdate }: {
                 <input
                   type="checkbox"
                   checked={option.checked}
+                  disabled={!modesReady || modesSaving}
                   onChange={(event) => {
                     const nextValue = event.target.checked;
 
@@ -24477,9 +24526,11 @@ function RestaurantMenuSettingsEditor({ cell, onUpdate }: {
                       return;
                     }
 
-                    onUpdate({
-                      [option.key]: nextValue,
-                    } as Partial<RestaurantMenuEditorSettings>);
+                    void saveModes({
+                      restaurant_menu_menu_enabled: nextMenu,
+                      restaurant_menu_pickup_enabled: nextPickup,
+                      restaurant_menu_delivery_enabled: nextDelivery,
+                    });
                   }}
                   className="mb-2 h-4 w-4 accent-orange-600"
                 />
@@ -24488,6 +24539,7 @@ function RestaurantMenuSettingsEditor({ cell, onUpdate }: {
             ))}
           </div>
 
+          <p role="status" className="mt-2 text-xs font-semibold text-orange-900">{modesMessage || (!modesReady ? "주문 방식 불러오는 중..." : "선택하면 즉시 저장되며 메뉴 관리의 주문 방식에도 적용됩니다.")}</p>
           <div className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
             {cell.restaurant_menu_menu_enabled !== false &&
             cell.restaurant_menu_pickup_enabled !== true &&
@@ -24913,6 +24965,7 @@ function LinkPageEditor({
         {pageTypeSelector}
 
         <RestaurantMenuSettingsEditor
+          businessId={businessId}
           cell={section.content || {}}
           onUpdate={onUpdate}
         />
@@ -37610,7 +37663,7 @@ function TitleCellEditor({
       </Field>
 
       {mode === "restaurant-menu" ? (
-        <RestaurantMenuSettingsEditor cell={cell} onUpdate={onUpdate} />
+        <RestaurantMenuSettingsEditor businessId={businessId} cell={cell} onUpdate={onUpdate} />
       ) : null}
 
       {mode === "catering-request-form" ? (
