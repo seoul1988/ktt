@@ -1363,7 +1363,7 @@ export default function RestaurantMenu({
     return (
       <div
         data-category-text-bar
-        data-menu-style={menuStyle}
+        data-menu-style={menuStyle === "pills" ? "pills" : "tabs"}
         data-mobile-preview={compact ? "true" : undefined}
         ref={categoryBarMeasureRef}
         className={`${
@@ -1418,7 +1418,9 @@ export default function RestaurantMenu({
                     : ""
                 }`}
                 style={
-                  categoryPillBackgroundColor || categoryPillTextColor
+                  menuStyle !== "pills"
+                    ? { color: categoryPillTextColor || (isBunsMenu ? "#ffffff" : textColor) }
+                    : categoryPillBackgroundColor || categoryPillTextColor
                     ? {
                         backgroundColor: categoryPillBackgroundColor || (isBunsMenu ? (isActive ? accent : "rgba(255,255,255,0.05)") : (isActive ? "#111827" : "#ffffff")),
                         color: categoryPillTextColor || (isBunsMenu ? (isActive ? "#111827" : accent) : (isActive ? "#ffffff" : "#111827")),
@@ -1480,7 +1482,7 @@ export default function RestaurantMenu({
     <div
       ref={rootRef}
       data-compact-order-menu
-      data-menu-style={menuStyle}
+      data-menu-style={menuStyle === "pills" ? "pills" : "tabs"}
       data-mobile-preview={compact ? "true" : undefined}
       className="relative w-full"
       style={{
@@ -1493,13 +1495,13 @@ export default function RestaurantMenu({
           [data-compact-order-menu][data-menu-style="tabs"] [data-service-options] { gap: 0; }
           [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice] {
             min-height: 32px; padding: 5px 16px; font-size: 11px;
-            border: 0; border-radius: 0; box-shadow: none;
-            background: #252525;
+            border: 0 !important; border-radius: 0; box-shadow: none;
+            background: #252525 !important;
           }
           [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice]:first-of-type { border-radius: 999px 0 0 999px; }
           [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice]:last-of-type { border-radius: 0 999px 999px 0; }
           [data-compact-order-menu][data-menu-style="tabs"] [data-service-choice][aria-pressed="true"] {
-            border-radius: 999px; background: #f5f5f5;
+            border-radius: 999px; background: #f5f5f5 !important;
           }
           [data-category-text-bar][data-menu-style="tabs"] { box-shadow: none; border: 0; }
           [data-category-text-bar][data-menu-style="tabs"] [data-category-track] { display: block; }
