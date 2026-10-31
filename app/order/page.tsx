@@ -54,9 +54,19 @@ export default async function BrandOrderPage({ searchParams }: {
     }
     return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-black">Choose a restaurant</h1><p className="mt-3">Please use the restaurant’s online order link.</p></main>;
   }
-  const { data, error } = await supabaseAdmin.from("businesses")
+  let { data, error } = await supabaseAdmin.from("businesses")
     .select("id,name,address,phone,lat,lng,hours,image_url,logo_url,brand_code")
     .eq("brand_code", brand).or("hidden.is.null,hidden.eq.false").order("name");
+  // Older databases may not have a standalone logo_url column.
+  // Logo metadata must never prevent the location selector from loading.
+  if (error) {
+    console.error("Brand store logo lookup failed; retrying without logo metadata", error);
+    const fallback = await supabaseAdmin.from("businesses")
+      .select("id,name,address,phone,lat,lng,hours,image_url,brand_code")
+      .eq("brand_code", brand).or("hidden.is.null,hidden.eq.false").order("name");
+    data = fallback.data?.map(store => ({ ...store, logo_url: null })) ?? null;
+    error = fallback.error;
+  }
   if (error) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-black">Online ordering is temporarily unavailable</h1><p className="mt-3">Please try again shortly or contact the restaurant.</p></main>;
   const stores = (data || []) as BrandStore[];
   if (!stores.length) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-black">No locations available</h1><p className="mt-3">There are currently no listed locations for this brand.</p></main>;
