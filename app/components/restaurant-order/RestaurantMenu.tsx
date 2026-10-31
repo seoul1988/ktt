@@ -1463,7 +1463,7 @@ export default function RestaurantMenu({
   if (loading) {
     return (
       <div className="flex min-h-[260px] items-center justify-center text-sm font-black">
-        메뉴 불러오는 중...
+        Loading menu...
       </div>
     );
   }
