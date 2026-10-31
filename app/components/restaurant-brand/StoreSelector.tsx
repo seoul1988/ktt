@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { coordinates, distanceMiles, orderLink, type BrandStore } from "@/lib/restaurant-brand/brand";
 
 const StoreMap = dynamic(() => import("./StoreMap"), {
@@ -15,10 +15,11 @@ export default function StoreSelector({ stores, brand, initialService }: {
 }) {
   const [service, setService] = useState(initialService === "delivery" ? "delivery" : "pickup");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const cardList = useRef<HTMLDivElement>(null);
   const cards = useRef(new Map<number, HTMLElement>());
   function selectStore(id: number) {
     setSelectedId(id);
-    cards.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    cards.current.get(id)?.scrollIntoView({ behavior: "instant", block: "nearest", inline: "center" });
   }
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState<[number, number] | null>(null);
@@ -32,6 +33,38 @@ export default function StoreSelector({ stores, brand, initialService }: {
     .sort((a, b) => location
       ? (a.distance ?? Infinity) - (b.distance ?? Infinity)
       : a.store.name.localeCompare(b.store.name)), [stores, search, location]);
+
+  // Match the card nearest the horizontal viewport centre, including the first/last card.
+  useEffect(() => {
+    const list = cardList.current;
+    if (!list) return;
+    const mobile = window.matchMedia("(max-width: 1023px)");
+    let frame = 0;
+    const update = () => {
+      if (!mobile.matches) return;
+      const bounds = list.getBoundingClientRect();
+      const centre = bounds.left + list.clientWidth / 2;
+      let nearest: number | null = null;
+      let distance = Infinity;
+      for (const { store } of displayed) {
+        const card = cards.current.get(store.id);
+        if (!card) continue;
+        const rect = card.getBoundingClientRect();
+        const delta = Math.abs(rect.left + rect.width / 2 - centre);
+        if (delta < distance) { distance = delta; nearest = store.id; }
+      }
+      setSelectedId(nearest);
+    };
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
+    list.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    schedule();
+    return () => {
+      cancelAnimationFrame(frame);
+      list.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [displayed]);
 
   function locate() {
     if (!navigator.geolocation) {
@@ -76,11 +109,13 @@ export default function StoreSelector({ stores, brand, initialService }: {
             {displayed.length} stores{service === "delivery" ? " · Delivery availability is checked at checkout." : ""}
           </p>
           <p className="mt-2 text-xs text-slate-500 lg:hidden">Swipe to choose your store →</p>
-          <div role="region" aria-label="Choose a store" tabIndex={0}
+          <div ref={cardList} role="region" aria-label="Choose a store" tabIndex={0}
             className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 lg:mt-0 lg:block lg:overflow-visible lg:pb-0">
             {displayed.map(({ store, distance }) => <article key={store.id}
               ref={node => { if (node) cards.current.set(store.id, node); else cards.current.delete(store.id); }}
               onClick={() => setSelectedId(store.id)}
+              onMouseEnter={() => { if (window.matchMedia("(hover: hover)").matches) setSelectedId(store.id); }}
+              onFocus={() => setSelectedId(store.id)}
               aria-label={`${store.name}${selectedId === store.id ? ", selected" : ""}`}
               style={selectedId === store.id ? { backgroundColor: "#fff4ed", boxShadow: "inset 0 0 0 2px #b64032" } : undefined}
               className="flex w-[86%] max-w-[360px] shrink-0 snap-start flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:w-auto lg:max-w-none lg:rounded-none lg:border-0 lg:border-b lg:py-5 lg:px-0 lg:shadow-none">

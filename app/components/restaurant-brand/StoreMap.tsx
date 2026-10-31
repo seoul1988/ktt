@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap } from "react-leaflet";
-import { divIcon, latLngBounds } from "leaflet";
+import { divIcon, latLngBounds, type Marker as LeafletMarker, type CircleMarker as LeafletCircleMarker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { coordinates, orderLink, type BrandStore } from "@/lib/restaurant-brand/brand";
 
@@ -18,6 +18,14 @@ function Fit({ points }: { points: Point[] }) {
 function StorePin({ store, point, selected, onSelect, brand, service }: {
   store: BrandStore; point: Point; selected: boolean; onSelect: (id: number) => void; brand: string; service: string;
 }) {
+  const map = useMap();
+  const marker = useRef<LeafletMarker | LeafletCircleMarker | null>(null);
+  useEffect(() => {
+    if (selected) {
+      map.panInside(point, { padding: [60, 60], animate: true });
+      marker.current?.openPopup();
+    } else marker.current?.closePopup();
+  }, [map, selected, point[0], point[1]]);
   const pin = useMemo(() => {
     if (!store.logo_url) return null;
     const element = document.createElement("div");
@@ -30,11 +38,11 @@ function StorePin({ store, point, selected, onSelect, brand, service }: {
     element.appendChild(image);
     return divIcon({ html: element, className: "", iconSize: [48, 48], iconAnchor: [24, 24], popupAnchor: [0, -24] });
   }, [store.logo_url, store.name, selected]);
-  const popup = <Popup><strong>{store.name}</strong><p>{store.address}</p><a href={orderLink(brand, store.id, service)}>Order Here →</a></Popup>;
+  const popup = <Popup autoPan={false}><strong>{store.name}</strong><p>{store.address}</p><a href={orderLink(brand, store.id, service)}>Order Here →</a></Popup>;
   const eventHandlers = { click: () => onSelect(store.id) };
   return pin
-    ? <Marker position={point} icon={pin} title={store.name} eventHandlers={eventHandlers} zIndexOffset={selected ? 1000 : 0}>{popup}</Marker>
-    : <CircleMarker center={point} radius={selected ? 13 : 10} eventHandlers={eventHandlers} pathOptions={{ color: selected ? "#1d4ed8" : "#ffffff", fillColor: "#b64032", fillOpacity: 1, weight: 3 }}>{popup}</CircleMarker>;
+    ? <Marker ref={node => { marker.current = node; }} position={point} icon={pin} title={store.name} eventHandlers={eventHandlers} zIndexOffset={selected ? 1000 : 0}>{popup}</Marker>
+    : <CircleMarker ref={node => { marker.current = node; }} center={point} radius={selected ? 13 : 10} eventHandlers={eventHandlers} pathOptions={{ color: selected ? "#1d4ed8" : "#ffffff", fillColor: "#b64032", fillOpacity: 1, weight: 3 }}>{popup}</CircleMarker>;
 }
 export default function StoreMap({ stores, brand, service, selectedId, onSelect, location }: {
   stores: BrandStore[]; brand: string; service: string; selectedId: number | null;
