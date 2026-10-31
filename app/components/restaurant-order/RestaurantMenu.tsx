@@ -2267,6 +2267,8 @@ export default function RestaurantMenu({
           backgroundColor={backgroundColor}
           textColor={textColor}
           orderEnabled={orderingAvailable}
+          orderingClosed={orderingClosed}
+          orderingClosedReason={orderingClosedReason}
           dealPromotions={getPromotionsForMenuItem(selectedItem.id)}
           selectedPromotionRewards={selectedPromotionRewards}
           onPromotionRewardChange={(promotionId, choices) =>

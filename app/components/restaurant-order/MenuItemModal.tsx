@@ -38,6 +38,8 @@ type Props = {
   backgroundColor: string;
   textColor: string;
   orderEnabled?: boolean;
+  orderingClosed?: boolean;
+  orderingClosedReason?: string;
   dealPromotions?: MenuDealDisplay[];
   selectedPromotionRewards?: Record<string, MenuDealDisplay["rewardChoices"]>;
   onPromotionRewardChange?: (promotionId: string, choices: MenuDealDisplay["rewardChoices"]) => void;
@@ -214,6 +216,8 @@ export default function MenuItemModal({
   backgroundColor,
   textColor,
   orderEnabled = false,
+  orderingClosed = false,
+  orderingClosedReason = "",
   dealPromotions = [],
   selectedPromotionRewards = {},
   onPromotionRewardChange,
@@ -557,7 +561,7 @@ export default function MenuItemModal({
     unitPrice * Math.max(1, menuQuantity);
 
   function handleAddToOrder() {
-    if (!orderEnabled || !optionsValid) return;
+    if (!orderEnabled || orderingClosed || !optionsValid) return;
 
     onAddToOrder?.({
       item,
@@ -569,7 +573,7 @@ export default function MenuItemModal({
     });
   }
 
-  const addButtonDisabled = !orderEnabled || !optionsValid;
+  const addButtonDisabled = !orderEnabled || orderingClosed || !optionsValid;
 
   /*
    * 화면 표시 순서만 정리합니다.
@@ -1087,12 +1091,16 @@ export default function MenuItemModal({
               className={`flex min-w-0 flex-1 items-center justify-between text-left font-black transition ${
                 isIPhone ? "gap-2 px-3 text-sm" : "gap-3 px-4"
               } ${
-                addButtonDisabled
+                orderingClosed
+                  ? "cursor-not-allowed bg-red-600 text-white"
+                  : addButtonDisabled
                   ? "cursor-not-allowed bg-gray-400 text-white"
                   : "cursor-pointer bg-green-600 text-white hover:bg-green-700 active:bg-green-800"
               }`}
               title={
-                !orderEnabled
+                orderingClosed
+                  ? orderingClosedReason || "Online ordering is closed."
+                  : !orderEnabled
                   ? "Ordering is available only on the Order page."
                   : optionsValid
                     ? "Add the selected item and options to your order"
@@ -1100,7 +1108,7 @@ export default function MenuItemModal({
               }
             >
               <span className="shrink-0">
-                Add to order
+                {orderingClosed ? "ORDER CLOSED" : "Add to order"}
               </span>
 
               <span className="min-w-0 text-right">
