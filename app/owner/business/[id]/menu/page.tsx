@@ -18,6 +18,8 @@ type Category = {
 };
 
 type MenuOption = {
+  /** ON이면 같은 옵션을 여러 개 선택 */
+  quantitySelect?: boolean;
   name: string;
   priceDelta: number;
   soldOut: boolean;
@@ -163,6 +165,10 @@ function cleanPrice(value: string) {
 }
 
 
+function isQuantitySelectEnabled(value: unknown): boolean {
+  return value === true || value === 1 || (typeof value === "string" && /^(true|1|on)$/i.test(value.trim()));
+}
+
 function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
   const raw =
     item.option_groups ??
@@ -212,6 +218,7 @@ function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
           name: String(option?.name || `Option ${optionIndex + 1}`),
           priceDelta: Number(option?.priceDelta || 0),
           soldOut: Boolean(option?.soldOut),
+          quantitySelect: isQuantitySelectEnabled((option as any)?.quantitySelect ?? (option as any)?.quantity_select),
           useSubOption: Boolean(
             (option as any)?.useSubOption ??
               (option as any)?.use_sub_option ??
@@ -2096,6 +2103,7 @@ export default function OwnerBusinessMenuPage() {
               name: String(option?.name || `Option ${optionIndex + 1}`),
               priceDelta: Number(option?.priceDelta || 0),
               soldOut: Boolean(option?.soldOut),
+              quantitySelect: isQuantitySelectEnabled((option as any)?.quantitySelect ?? (option as any)?.quantity_select),
               useSubOption: Boolean((option as any)?.useSubOption),
               subOptionGroupNo: (() => {
                 const value = (option as any)?.subOptionGroupNo;
@@ -2148,7 +2156,7 @@ export default function OwnerBusinessMenuPage() {
       if (groupIds.length > 0) {
         const { data: choiceRows, error: choiceError } = await supabase
           .from("menu_option_choices")
-          .select("id, option_group_id, name, price_delta, sort_order, active, sold_out, use_sub_option, sub_option_group_no")
+          .select("*")
           .in("option_group_id", groupIds)
           .eq("active", true)
           .order("sort_order", { ascending: true });
@@ -2190,6 +2198,7 @@ export default function OwnerBusinessMenuPage() {
             name: String(choice.name || `Option ${optionIndex + 1}`),
             priceDelta: Number(choice.price_delta || 0),
             soldOut: Boolean(choice.sold_out),
+            quantitySelect: isQuantitySelectEnabled(choice.quantitySelect ?? choice.quantity_select),
             displayOrder: Number(choice.sort_order ?? optionIndex),
             useSubOption: choice.use_sub_option === true,
             subOptionGroupNo:
@@ -3107,6 +3116,7 @@ export default function OwnerBusinessMenuPage() {
         name: option.name.trim() || `Option ${index + 1}`,
         priceDelta: Number(Number(option.priceDelta || 0).toFixed(2)),
         soldOut: Boolean(option.soldOut),
+        quantitySelect: isQuantitySelectEnabled((option as any)?.quantitySelect ?? (option as any)?.quantity_select),
         displayOrder: index,
         useSubOption: Boolean(option.useSubOption),
         subOptionGroupNo:
@@ -3163,6 +3173,14 @@ export default function OwnerBusinessMenuPage() {
               "서브옵션 라이브러리 저장에 실패했습니다.",
           );
         }
+        const quantityResponse = await fetch(`/api/owner/business/${businessId}/menu`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: "set_sub_option_quantities", subOptionGroupNo: template.subOptionGroupNo,
+            choices: template.options.map(option => ({ name: option.name, quantitySelect: Boolean(option.quantitySelect) })) }),
+        });
+        const quantityData = await readApiJson(quantityResponse);
+        if (!quantityResponse.ok) throw new Error(quantityData?.error || "서브옵션 수량 설정 저장 실패");
       } catch (error) {
         const failureText =
           error instanceof Error
@@ -4046,6 +4064,7 @@ export default function OwnerBusinessMenuPage() {
             name: optionName,
             priceDelta: Number(priceDelta.toFixed(2)),
             soldOut: Boolean(option.soldOut),
+            quantitySelect: isQuantitySelectEnabled((option as any)?.quantitySelect ?? (option as any)?.quantity_select),
             displayOrder: optionIndex,
             useSubOption: Boolean(option.useSubOption),
             subOptionGroupNo:
@@ -5203,6 +5222,7 @@ export default function OwnerBusinessMenuPage() {
                     name: optionName,
                     priceDelta: Number(priceDelta.toFixed(2)),
                     soldOut: Boolean(option.soldOut),
+                    quantitySelect: isQuantitySelectEnabled((option as any)?.quantitySelect ?? (option as any)?.quantity_select),
                     displayOrder: optionIndex,
                     useSubOption: Boolean(option.useSubOption),
                     subOptionGroupNo:
@@ -7379,7 +7399,7 @@ export default function OwnerBusinessMenuPage() {
                     templateOptionsInput.map((option, optionIndex) => (
                       <div
                         key={`template-option-${optionIndex}`}
-                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_96px_150px_120px_110px_auto_auto]"
+                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_96px_150px_110px_120px_110px_auto_auto]"
                       >
                         <input
                           value={option.name}
@@ -7448,6 +7468,17 @@ export default function OwnerBusinessMenuPage() {
                             </option>
                           ))}
                         </select>
+
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(option.quantitySelect)}
+                          onClick={() => updateTemplateOption(optionIndex, { quantitySelect: !option.quantitySelect })}
+                          title="ON이면 같은 옵션의 수량을 더할 수 있습니다."
+                          className={`rounded-lg border px-2 py-2 text-[10px] font-black ${option.quantitySelect ? "border-green-300 bg-green-50 text-green-800" : "border-gray-200 bg-gray-50 text-gray-600"}`}
+                        >
+                          수량 조절 {option.quantitySelect ? "ON" : "OFF"}
+                        </button>
 
                         {!templateIsSubOptionOnlyInput ? (
                           <>
@@ -9794,7 +9825,7 @@ export default function OwnerBusinessMenuPage() {
                                       ) => (
                                         <div
                                           key={`${item.id}-${groupIndex}-${optionIndex}`}
-                                          className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[1fr_120px_155px_auto_auto]"
+                                          className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[1fr_120px_155px_110px_auto_auto]"
                                         >
                                           <input
                                             value={option.name}
@@ -9878,6 +9909,16 @@ export default function OwnerBusinessMenuPage() {
                                               ),
                                             )}
                                           </select>
+
+                                          <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={Boolean(option.quantitySelect)}
+                                            onClick={() => updateOption(item.id, groupIndex, optionIndex, { quantitySelect: !option.quantitySelect })}
+                                            className={`rounded-lg border px-2 py-2 text-[10px] font-black ${option.quantitySelect ? "border-green-300 bg-green-50 text-green-800" : "border-gray-200 bg-gray-50 text-gray-600"}`}
+                                          >
+                                            수량 조절 {option.quantitySelect ? "ON" : "OFF"}
+                                          </button>
 
                                           <label className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-2 text-[10px] font-black">
                                             <input

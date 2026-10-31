@@ -1294,7 +1294,7 @@ export default function RestaurantMenu({
         const quantityText = selectedQuantity > 1 ? ` ×${selectedQuantity}` : "";
         const priceText =
           priceDelta !== 0
-            ? ` (${priceDelta > 0 ? "+" : "-"}$${Math.abs(priceDelta).toFixed(2)})`
+            ? ` (${priceDelta > 0 ? "+" : "-"}$${Math.abs(priceDelta * selectedQuantity).toFixed(2)})`
             : "";
 
         labels.push(`${option.name}${quantityText}${priceText}`);

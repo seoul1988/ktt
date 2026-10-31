@@ -185,7 +185,7 @@ export async function GET(
       supabase
         .from("business_menu_option_items")
         .select(
-          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
+          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no,quantity_select",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -227,7 +227,7 @@ export async function GET(
       } = await supabase
         .from("menu_option_choices")
         .select(
-          "id,option_group_id,name,price_delta,sort_order,active,sold_out,use_sub_option,sub_option_group_no",
+          "id,option_group_id,name,price_delta,sort_order,active,sold_out,use_sub_option,sub_option_group_no,quantity_select",
         )
         .in("option_group_id", libraryGroupIds)
         .eq("active", true)
@@ -261,6 +261,8 @@ export async function GET(
           name: choice.name,
           priceDelta: Number(choice.price_delta ?? 0),
           price_delta: Number(choice.price_delta ?? 0),
+          quantitySelect: choice.quantity_select === true,
+          quantity_select: choice.quantity_select === true,
           soldOut: choice.sold_out === true,
           sold_out: choice.sold_out === true,
           is_available: choice.sold_out !== true,
@@ -308,6 +310,8 @@ export async function GET(
         name: option.name,
         priceDelta: Number(option.price_delta ?? 0),
         price_delta: Number(option.price_delta ?? 0),
+        quantitySelect: option.quantity_select === true,
+        quantity_select: option.quantity_select === true,
         soldOut: option.is_available === false,
         sold_out: option.is_available === false,
         is_available: option.is_available !== false,

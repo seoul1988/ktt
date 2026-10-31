@@ -10,6 +10,10 @@ type AccessResult = {
   error: string;
 };
 
+function isQuantitySelectEnabled(value: unknown): boolean {
+  return value === true || value === 1 || (typeof value === "string" && /^(true|1|on)$/i.test(value.trim()));
+}
+
 function getSupabaseAdmin() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -324,7 +328,7 @@ export async function GET(
       supabase
         .from("business_menu_option_items")
         .select(
-          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
+          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no,quantity_select",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -348,6 +352,8 @@ export async function GET(
         name: option.name,
         priceDelta: Number(option.price_delta ?? 0),
         price_delta: Number(option.price_delta ?? 0),
+        quantitySelect: isQuantitySelectEnabled(option.quantity_select),
+        quantity_select: isQuantitySelectEnabled(option.quantity_select),
         soldOut: option.is_available === false,
         sold_out: option.is_available === false,
         is_available: option.is_available !== false,
@@ -734,7 +740,7 @@ export async function POST(
           await supabase
             .from("business_menu_option_items")
             .select(
-              "option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
+              "option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no,quantity_select",
             )
             .eq("business_id", businessId)
             .in("option_group_id", sourceGroupIds)
@@ -819,6 +825,7 @@ export async function POST(
                   display_order: Number(
                     option.display_order ?? 0,
                   ),
+                  quantity_select: isQuantitySelectEnabled(option.quantity_select),
                   use_sub_option:
                     option.use_sub_option === true,
                   sub_option_group_no:
@@ -869,6 +876,7 @@ export async function POST(
             priceDelta: Number(
               option.price_delta ?? 0,
             ),
+            quantitySelect: isQuantitySelectEnabled(option.quantity_select),
             soldOut:
               option.is_available === false,
             useSubOption:
@@ -962,6 +970,45 @@ export async function PATCH(
       : [];
 
     const supabase = getSupabaseAdmin();
+
+    // Fail before changing/deleting existing menu data if the migration is missing.
+    const { error: quantitySchemaError } = await supabase
+      .from("business_menu_option_items").select("quantity_select").limit(0);
+    if (quantitySchemaError) {
+      return NextResponse.json({ error: "옵션 수량 설정 DB 준비가 필요합니다. 동봉된 SQL을 먼저 실행하세요." }, { status: 503 });
+    }
+
+    if (body?.action === "set_sub_option_quantities") {
+      const groupNo = Number(body?.subOptionGroupNo);
+      const choices = body?.choices;
+      if (!Number.isInteger(groupNo) || groupNo <= 0 || !Array.isArray(choices) || choices.length > 1000 || choices.some((c: any) => !String(c?.name || "").trim() || typeof c?.quantitySelect !== "boolean")) {
+        return NextResponse.json({ error: "잘못된 서브옵션 수량 설정입니다." }, { status: 400 });
+      }
+      const { data: libraryGroups, error: libraryGroupError } = await supabase
+        .from("menu_option_groups").select("id")
+        .eq("business_id", businessId).eq("sub_option_group_no", groupNo)
+        .eq("is_sub_option_only", true).eq("active", true);
+      if (libraryGroupError) throw libraryGroupError;
+      const groupIds = (libraryGroups || []).map((g) => Number(g.id));
+      if (!groupIds.length) return NextResponse.json({ error: "저장된 서브옵션 그룹을 찾을 수 없습니다." }, { status: 404 });
+      const { data: savedChoices, error: choicesError } = await supabase
+        .from("menu_option_choices").select("id,name,quantity_select")
+        .in("option_group_id", groupIds).eq("active", true);
+      if (choicesError) throw choicesError;
+      const updates = choices.map((choice: any) => ({
+        matches: (savedChoices || []).filter((saved) => String(saved.name).trim() === String(choice.name).trim()),
+        enabled: choice.quantitySelect,
+      }));
+      if (updates.some((update: any) => !update.matches.length)) return NextResponse.json({ error: "저장된 서브옵션 항목을 찾을 수 없습니다. 다시 저장하세요." }, { status: 409 });
+      for (const update of updates) {
+        const { error } = await supabase.from("menu_option_choices")
+          .update({ quantity_select: update.enabled })
+          .in("id", update.matches.map((choice: any) => Number(choice.id)))
+          .in("option_group_id", groupIds);
+        if (error) throw error;
+      }
+      return NextResponse.json({ ok: true, updatedChoices: choices.length });
+    }
 
     let updatedCategories = 0;
     let updatedItems = 0;
@@ -1284,6 +1331,7 @@ export async function PATCH(
                     rawOption?.is_available === false
                   ),
                 display_order: optionIndex,
+                quantity_select: isQuantitySelectEnabled(rawOption?.quantitySelect ?? rawOption?.quantity_select),
                 use_sub_option: useSubOption,
                 sub_option_group_no:
                   useSubOption && subOptionGroupNo != null
@@ -1432,6 +1480,7 @@ export async function PATCH(
             (option: {
               name: string;
               price_delta: number;
+              quantity_select: boolean;
               is_available: boolean;
               display_order: number;
               use_sub_option: boolean;
@@ -1442,6 +1491,7 @@ export async function PATCH(
                 Number(insertedGroup.id),
               name: option.name,
               price_delta: option.price_delta,
+              quantity_select: option.quantity_select,
               is_available:
                 option.is_available,
               display_order:

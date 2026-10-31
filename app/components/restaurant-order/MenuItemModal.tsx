@@ -1,5 +1,4 @@
-
-
+"use client";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import MenuOptionGroup from "./MenuOptionGroup";
@@ -131,7 +130,8 @@ function normalizeSelections(
       if (option.soldOut || remaining <= 0) return;
 
       const oKey = optionKey(option, optionIndex);
-      const requested = toSafeInteger(rawGroup[oKey]);
+      const rawRequested = toSafeInteger(rawGroup[oKey]);
+      const requested = option.quantitySelect ? rawRequested : Math.min(1, rawRequested);
 
       const allowed =
         maximum == null
@@ -215,6 +215,7 @@ export default function MenuItemModal({
           name: String(option?.name || "").trim().toLowerCase(),
           priceDelta: Number(option?.priceDelta || 0),
           soldOut: Boolean(option?.soldOut),
+          quantitySelect: Boolean(option.quantitySelect),
           useSubOption: Boolean((option as any)?.useSubOption),
           subOptionGroupNo:
             (option as any)?.subOptionGroupNo == null
@@ -277,7 +278,8 @@ export default function MenuItemModal({
     const gKey = groupKey(group, groupIndex);
     const oKey = optionKey(option, optionIndex);
     const maximum = getGroupMaximum(group);
-    const requested = toSafeInteger(requestedQuantity);
+    const rawRequested = toSafeInteger(requestedQuantity);
+    const requested = option.quantitySelect ? rawRequested : Math.min(1, rawRequested);
 
     setSelections((current) => {
       /*
