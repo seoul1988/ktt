@@ -18087,6 +18087,26 @@ function MobileWebsiteHeader({
     : mobileHeaderTitle;
   const menuCell = findFirstCellByType(grid.cells, "menu");
   const phoneCells = findAllCellsByType(grid.cells, "phone");
+  const showNavigation = websiteSettings?.header_submenu_enabled === true;
+  const savedNavigation = websiteSettings?.header_submenu_items ?? [];
+  const mobileNavigation = savedNavigation.length
+    ? savedNavigation.map(item => ({
+        id: item.id, label: item.label,
+        href: getHeaderMenuHref(item, business.id),
+        children: (item.children ?? []).map(child => ({
+          id: child.id, label: child.label,
+          href: getHeaderMenuHref(child, business.id),
+        })),
+      }))
+    : menuCell ? normalizeMenuItems(menuCell).map(item => ({
+        id: item.id, label: item.label,
+        href: getGridMenuHref(item, business.id),
+        children: [] as Array<{ id: string; label: string; href: string }>,
+      })) : [];
+  const fallbackPhone = String(getBusinessContactValue(business,
+    ["phone", "phone_number", "telephone", "business_phone", "contact_phone"],
+  ) || "").trim();
+
 
 
   const mobileHeight = getMobileHeaderHeight(websiteSettings);
@@ -18189,10 +18209,24 @@ function MobileWebsiteHeader({
             maxHeight: "min(70vh, 520px)",
           }}
         >
-          {phoneCells.length ? (
+          {showNavigation ? (
+            <nav aria-label="Mobile navigation" className="grid gap-1">
+              {mobileNavigation.map(item => (
+                <div key={item.id}>
+                  <a href={item.href} onClick={() => setOpen(false)}
+                    className="block rounded-lg px-3 py-3 text-sm font-bold no-underline hover:bg-black/5"
+                    style={{ color: mobileControlColor }}>{item.label || "Menu"}</a>
+                  {item.children.map(child => (
+                    <a key={child.id} href={child.href} onClick={() => setOpen(false)}
+                      className="ml-4 block rounded-lg px-3 py-2.5 text-sm no-underline hover:bg-black/5"
+                      style={{ color: mobileControlColor }}>{child.label || "Submenu"}</a>
+                  ))}
+                </div>
+              ))}
+            </nav>
+          ) : phoneCells.length ? (
             <div className="ml-auto grid w-full max-w-[280px] gap-3">
               {phoneCells.map((cell) => {
-                if (cell.phone_show_order_modes) return <HeaderOrderModes key={cell.id} businessId={business.id} />;
                 const number = String(cell.phone_number || cell.text || getBusinessContactValue(business, ["phone", "phone_number", "telephone", "business_phone", "contact_phone"]) || "").trim();
                 return number ? (
                   <a
@@ -18212,6 +18246,12 @@ function MobileWebsiteHeader({
 
 
             </div>
+          ) : fallbackPhone ? (
+            <a href={normalizePhoneHref(fallbackPhone) || undefined}
+              className="ml-auto flex min-h-11 w-full max-w-[280px] items-center justify-center gap-2 rounded-full border px-4 text-sm font-black no-underline"
+              style={{ color: mobileControlColor, borderColor: `${mobileControlColor}55` }}>
+              <span aria-hidden="true">☎</span>{fallbackPhone}
+            </a>
           ) : null}
         </div>
       ) : null}
