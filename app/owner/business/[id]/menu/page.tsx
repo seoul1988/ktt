@@ -2398,13 +2398,11 @@ export default function OwnerBusinessMenuPage() {
     const templateKey = templateName.trim().toLowerCase();
     const changedItemIds: number[] = [];
 
-    setItems((current) => {
-      const next = current.map((item) => {
+    const nextItems = itemsRef.current.map((item) => {
         const currentGroups = normalizeOptionGroups(item);
         let changed = false;
         const nextGroups = currentGroups.map((group) => {
           if (group.name.trim().toLowerCase() !== templateKey) return group;
-          if (group.receiptPrintOrder === receiptPrintOrder) return group;
           changed = true;
           return { ...group, receiptPrintOrder };
         });
@@ -2417,9 +2415,8 @@ export default function OwnerBusinessMenuPage() {
           menu_option_groups: nextGroups,
         };
       });
-      itemsRef.current = next;
-      return next;
-    });
+    itemsRef.current = nextItems;
+    setItems(nextItems);
 
     changedItemIds.forEach((itemId) => scheduleItemAutoSave(itemId));
     setMessage(`✓ 영수증 출력 순서 ${receiptPrintOrder}번으로 저장합니다.`);
