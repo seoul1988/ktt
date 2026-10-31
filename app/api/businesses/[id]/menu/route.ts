@@ -176,7 +176,7 @@ export async function GET(
       supabase
         .from("business_menu_option_groups")
         .select(
-          "id,menu_item_id,name,is_required,min_select,max_select,display_order,sub_option_group_no,is_sub_option_only",
+          "id,menu_item_id,name,is_required,min_select,max_select,display_order,receipt_print_order,sub_option_group_no,is_sub_option_only",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -194,7 +194,7 @@ export async function GET(
       supabase
         .from("menu_option_groups")
         .select(
-          "id,name,required,min_select,max_select,sort_order,active,sub_option_group_no,is_sub_option_only",
+          "id,name,required,min_select,max_select,sort_order,receipt_print_order,active,sub_option_group_no,is_sub_option_only",
         )
         .eq("business_id", businessId)
         .eq("active", true)
@@ -289,6 +289,8 @@ export async function GET(
           group.max_select == null
             ? null
             : Math.max(0, Number(group.max_select)),
+        receiptPrintOrder: Number(group.receipt_print_order ?? 999),
+        receipt_print_order: Number(group.receipt_print_order ?? 999),
         displayOrder: 9999,
         display_order: 9999,
         subOptionGroupNo: groupNo,
@@ -356,6 +358,8 @@ export async function GET(
         min_select: minSelect,
         maxSelect,
         max_select: maxSelect,
+        receiptPrintOrder: Number(group.receipt_print_order ?? 999),
+        receipt_print_order: Number(group.receipt_print_order ?? 999),
         displayOrder: Number(group.display_order ?? 0),
         display_order: Number(group.display_order ?? 0),
         subOptionGroupNo:

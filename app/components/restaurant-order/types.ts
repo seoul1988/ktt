@@ -8,6 +8,7 @@ export type MenuOptionItem = {
   subOptionGroupNo?: number | null;
 };
 export type MenuOptionGroup = {
+  receiptPrintOrder?: number;
   name: string;
   description?: string;
   required: boolean;
@@ -61,6 +62,11 @@ export function getOptionGroups(item: RestaurantMenuItem | null): MenuOptionGrou
       minSelect: Number.isFinite(minValue) ? Math.max(0, Math.floor(minValue)) : 0,
       maxSelect: maxSelect != null && Number.isFinite(maxSelect) ? Math.max(0, Math.floor(maxSelect)) : null,
       displayOrder: Number(group.displayOrder ?? group.display_order ?? groupIndex) || groupIndex,
+      receiptPrintOrder: (() => {
+        const value = group.receiptPrintOrder ?? group.receipt_print_order;
+        const number = value == null || value === "" ? 999 : Number(value);
+        return Number.isFinite(number) ? number : 999;
+      })(),
       subOptionGroupNo: positiveNumber(group.subOptionGroupNo ?? group.sub_option_group_no),
       isSubOptionOnly: Boolean(group.isSubOptionOnly ?? group.is_sub_option_only ?? false),
       options: rawOptions.map((rawOption, optionIndex) => {

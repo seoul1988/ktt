@@ -534,9 +534,7 @@ export default function MenuItemModal({
    * 기존과 동일하게 동작하므로 originalIndex를 함께 들고 정렬합니다.
    *
    * 표시 순서:
-   * 1) REQUIRED 그룹
-   * 2) Combo It!
-   * 3) 나머지 OPTION 그룹
+   * 관리자 출력 번호가 낮은 순서. 같은 번호는 기존 순서를 유지합니다.
    */
   const displayGroups = useMemo(
     () =>
@@ -556,27 +554,7 @@ export default function MenuItemModal({
           (row) => !Boolean((row.group as any)?.isSubOptionOnly),
         )
         .sort((a, b) => {
-          // 화면 우선순위:
-          // 1) REQUIRED
-          // 2) Combo It!
-          // 3) 나머지는 영수증 출력 번호가 낮은 순서
-          const rank = (row: {
-            isRequired: boolean;
-            isComboIt: boolean;
-          }) => {
-            if (row.isRequired) return 0;
-            if (row.isComboIt) return 1;
-            return 2;
-          };
-
-          const rankDifference = rank(a) - rank(b);
-          if (rankDifference !== 0) return rankDifference;
-
-          // REQUIRED 그룹끼리 / Combo It!끼리는 기존 화면 순서를 유지합니다.
-          if (a.isRequired || a.isComboIt) {
-            return a.originalIndex - b.originalIndex;
-          }
-
+          // 필수 여부와 관계없이 관리자 출력 번호 순으로 표시합니다.
           const aOrder = Number.isFinite(a.receiptPrintOrder)
             ? a.receiptPrintOrder
             : 999;
