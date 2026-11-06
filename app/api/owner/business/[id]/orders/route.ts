@@ -30,7 +30,7 @@ export async function GET(
     const { data, error } = await db
       .from("restaurant_orders")
       .select(
-        "id,order_number,fulfillment_type,customer_name,customer_phone,requested_time,payment_method,payment_method_type,payment_status,order_status,subtotal,tax,tip,total,delivery_address,square_payment_id,created_at,restaurant_order_items(id,item_name,quantity,unit_price,line_total,instructions)",
+        "id,order_number,fulfillment_type,customer_name,customer_phone,requested_time,payment_method,payment_method_type,payment_status,order_status,subtotal,tax,tip,total,delivery_address,square_payment_id,created_at,restaurant_order_items(id,item_name,quantity,unit_price,line_total,instructions,selections)",
       )
       .eq("business_id", businessId)
       .neq("payment_status", "pending")
@@ -53,4 +53,3 @@ export async function GET(
     );
   }
 }
-

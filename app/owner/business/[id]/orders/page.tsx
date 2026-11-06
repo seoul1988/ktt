@@ -62,12 +62,35 @@ function paymentLabel(order: any) {
   return order.payment_method_type || order.payment_method || "—";
 }
 
+function orderItemOptions(selections: unknown): string[] {
+  if (!selections) return [];
+  let value: unknown = selections;
+  if (typeof value === "string") {
+    const raw = value.trim();
+    try { value = JSON.parse(raw); }
+    catch { return raw ? [raw] : []; }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const labels: string[] = [];
+  for (const group of Object.values(value as Record<string, unknown>)) {
+    if (!group || typeof group !== "object" || Array.isArray(group)) continue;
+    for (const [key, count] of Object.entries(group as Record<string, unknown>)) {
+      const qty = Number(count);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      const name = key.includes(":") ? key.slice(key.indexOf(":") + 1).trim() : key.trim();
+      if (name) labels.push(qty > 1 ? `${name} ×${qty}` : name);
+    }
+  }
+  return labels;
+}
+
 export default function OwnerOrdersPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const businessId = Number(params.id);
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refundingOrderId, setRefundingOrderId] = useState<number | null>(null);
@@ -454,19 +477,47 @@ export default function OwnerOrdersPage() {
               </div>
 
               <div className="mt-3 space-y-1">
-                {(o.restaurant_order_items || []).map((i: any) => (
-                  <div
-                    key={i.id}
-                    className="flex justify-between text-sm"
-                  >
-                    <span>
-                      <b>{i.quantity}×</b> {i.item_name}
-                    </span>
-                    <span>
-                      ${Number(i.line_total || 0).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+                {(o.restaurant_order_items || []).map((i: any) => {
+                  const itemKey = `${o.id}:${i.id}`;
+                  const expanded = Boolean(expandedItems[itemKey]);
+                  const options = orderItemOptions(i.selections);
+                  const note = String(i.instructions || "").trim();
+                  const hasDetails = options.length > 0 || Boolean(note);
+                  return (
+                    <div key={i.id} className="text-sm">
+                      <button
+                        type="button"
+                        aria-expanded={expanded}
+                        onClick={() => setExpandedItems((prev) => ({
+                          ...prev,
+                          [itemKey]: !prev[itemKey],
+                        }))}
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                      >
+                        <span className="min-w-0">
+                          <b>{i.quantity}×</b> {i.item_name}
+                          {hasDetails ? (
+                            <span className="ml-1 text-xs text-gray-500" aria-hidden="true">
+                              {expanded ? "▾" : "▸"}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0">
+                          ${Number(i.line_total || 0).toFixed(2)}
+                        </span>
+                      </button>
+                      {expanded ? (
+                        <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
+                          {options.map((option, index) => (
+                            <div key={index}>+ {option}</div>
+                          ))}
+                          {note ? <div>Note: {note}</div> : null}
+                          {!hasDetails ? <div>No options or special instructions</div> : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
