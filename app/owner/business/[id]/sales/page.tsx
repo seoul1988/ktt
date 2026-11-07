@@ -34,6 +34,8 @@ export default function SalesPage() {
   const [error, setError] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [appliedDates, setAppliedDates] = useState({ from: "", to: "" });
+  const [dateError, setDateError] = useState("");
   const [tab, setTab] = useState<"overview" | "items" | "refunds">("overview");
 
   async function load() {
@@ -54,8 +56,8 @@ export default function SalesPage() {
 
   const filtered = useMemo(() => orders.filter(o => {
     const d = dateET(o.created_at);
-    return (!from || d >= from) && (!to || d <= to);
-  }), [orders, from, to]);
+    return (!appliedDates.from || d >= appliedDates.from) && (!appliedDates.to || d <= appliedDates.to);
+  }), [orders, appliedDates]);
   const report = useMemo(() => {
     const sales = filtered.filter(o => !["cancelled", "refunded", "refund_pending"].includes(String(o.order_status).toLowerCase()) && !["refunded", "refund_pending", "failed", "cancelled"].includes(String(o.payment_status).toLowerCase()));
     const refunded = filtered.filter(o => ["refunded", "refund_pending"].includes(String(o.payment_status).toLowerCase()));
@@ -83,7 +85,21 @@ export default function SalesPage() {
       refundAmount: refunded.filter(o => String(o.payment_status).toLowerCase() === "refunded").reduce((n,o) => n + num(o.total),0)
     };
   }, [filtered]);
-  const period = `${from || "all"}_${to || "all"}`;
+  const period = `${appliedDates.from || "all"}_${appliedDates.to || "all"}`;
+  function applyDates() {
+    if (from && to && from > to) {
+      setDateError("From date must be on or before To date.");
+      return;
+    }
+    setDateError("");
+    setAppliedDates({ from, to });
+  }
+  function clearDates() {
+    setFrom("");
+    setTo("");
+    setDateError("");
+    setAppliedDates({ from: "", to: "" });
+  }
   const exportOrders = () => saveCsv(`ktown-orders-${period}.csv`, ["Date (ET)","Order #","Customer","Type","Payment method","Payment status","Order status","Subtotal","Tax","Tip","Total"], filtered.map(o => [dateET(o.created_at),o.order_number,o.customer_name,o.fulfillment_type,o.payment_method_type || o.payment_method,o.payment_status,o.order_status,num(o.subtotal),num(o.tax),num(o.tip),num(o.total)]));
   const exportItems = () => saveCsv(`ktown-items-${period}.csv`, ["Menu item","Quantity","Sales"], report.items.map(i => [i.name,i.quantity,i.sales]));
   const exportDaily = () => saveCsv(`ktown-daily-${period}.csv`, ["Date (ET)","Orders","Sales"], report.days.map(d => [d.date,d.orders,d.sales]));
@@ -95,11 +111,14 @@ export default function SalesPage() {
     <div className="mt-5 flex flex-wrap items-end gap-3 rounded-2xl border bg-gray-50 p-4">
       <label className="text-sm font-semibold">From <input className="mt-1 block rounded-lg border bg-white p-2" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
       <label className="text-sm font-semibold">To <input className="mt-1 block rounded-lg border bg-white p-2" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
-      <button className="rounded-lg border bg-white px-4 py-2 text-sm font-bold" onClick={()=>{setFrom("");setTo("");}}>All dates</button>
+      <button type="button" className="rounded-lg bg-gray-950 px-4 py-2 text-sm font-bold text-white" onClick={applyDates}>Apply</button>
+      <button type="button" className="rounded-lg border bg-white px-4 py-2 text-sm font-bold" onClick={clearDates}>All dates</button>
       <button className="rounded-lg border bg-white px-4 py-2 text-sm font-bold" onClick={exportOrders} disabled={loading || !!error}>Orders CSV</button>
       <button className="rounded-lg border bg-white px-4 py-2 text-sm font-bold" onClick={exportDaily} disabled={loading || !!error}>Daily CSV</button>
       <button className="rounded-lg border bg-white px-4 py-2 text-sm font-bold" onClick={exportItems} disabled={loading || !!error}>Menu CSV</button>
     </div>
+    {dateError && <p role="alert" className="mt-2 text-sm text-red-600">{dateError}</p>}
+    <p className="mt-2 text-xs text-gray-500">Applied period: {appliedDates.from || "Any date"} – {appliedDates.to || "Any date"}. Choose dates and click Apply to update reports and CSV exports.</p>
     {loading && <p className="mt-5">Loading sales data…</p>}
     {error && <p className="mt-5 text-red-600">{error}</p>}
     {!loading && !error && <>
