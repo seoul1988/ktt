@@ -509,9 +509,9 @@ export default async function BusinessManagePage({
 
   {isRestaurant && (
     <ManagementCard
-      href={`/owner/business/${businessId}/orders`}
-      icon="🧾"
-      title="온라인 주문 조회"
+      href={`/owner/business/${businessId}/sales`}
+      icon="📊"
+      title="판매 관리 · Sales & Reports"
       description="날짜별 주문, 고객 이름, 주문 시간, 픽업·딜리버리, 결제수단과 결제금액을 확인합니다."
     />
   )}
