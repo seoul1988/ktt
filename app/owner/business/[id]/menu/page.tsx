@@ -6545,6 +6545,14 @@ export default function OwnerBusinessMenuPage() {
                     </div>
                     <button
                       type="button"
+                      onClick={() => void connectSquare()}
+                      disabled={connectingSquare}
+                      className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                    >
+                      {connectingSquare ? "SQUARE로 이동 중..." : "RECONNECT SQUARE"}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void disconnectSquare()}
                       disabled={disconnectingSquare}
                       className="rounded-xl border-2 border-red-200 bg-white px-4 py-2.5 text-sm font-black text-red-700 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
