@@ -805,6 +805,11 @@ export default function OwnerBusinessMenuPage() {
   const [stripeSecretKeyMasked, setStripeSecretKeyMasked] = useState("");
   const [stripeWebhookSecretMasked, setStripeWebhookSecretMasked] = useState("");
 
+  const [squareManualApplicationIdInput, setSquareManualApplicationIdInput] = useState("");
+  const [squareManualLocationIdInput, setSquareManualLocationIdInput] = useState("");
+  const [squareManualAccessTokenInput, setSquareManualAccessTokenInput] = useState("");
+  const [squareManualOpen, setSquareManualOpen] = useState(false);
+  const [savingSquareManual, setSavingSquareManual] = useState(false);
   const [squareConfigured, setSquareConfigured] = useState(false);
   const [squareMerchantName, setSquareMerchantName] = useState("");
   const [squareMerchantId, setSquareMerchantId] = useState("");
@@ -1502,6 +1507,43 @@ export default function OwnerBusinessMenuPage() {
       );
     } finally {
       setSavingPaymentCredentials(false);
+    }
+  }
+
+  async function saveSquareManualCredentials() {
+    if (savingSquareManual) return;
+    if (!squareManualAccessTokenInput.trim() || !squareManualLocationIdInput.trim()) {
+      setMessage("Square Access Token과 Location ID를 입력하세요.");
+      return;
+    }
+    if (squareConfigured && !window.confirm("기존 Square 연결 정보를 새 API 정보로 교체하시겠습니까?")) return;
+    setSavingSquareManual(true);
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(`/api/owner/business/${businessId}/order-payment-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          paymentProvider: "square", manualSquareCredentials: true,
+          squareApplicationId: squareManualApplicationIdInput.trim(),
+          squareLocationId: squareManualLocationIdInput.trim(),
+          squareAccessToken: squareManualAccessTokenInput.trim(),
+        }),
+      });
+      const data = await readApiJson(response);
+      if (!response.ok) throw new Error(data?.error || "Square 설정 저장 실패");
+      setSquareConfigured(data?.squareConfigured === true);
+      setSquareMerchantName(String(data?.squareMerchantName || ""));
+      setSquareMerchantId(String(data?.squareMerchantId || ""));
+      setSquareLocationName(String(data?.squareLocationName || ""));
+      setSquareLocationId(String(data?.squareLocationId || ""));
+      setSquareManualAccessTokenInput("");
+      setSquareManualOpen(false);
+      setMessage("✓ Square API 연결 정보가 저장되었습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? `Square 연결 실패: ${error.message}` : "Square 연결 실패");
+    } finally {
+      setSavingSquareManual(false);
     }
   }
 
@@ -6522,7 +6564,7 @@ export default function OwnerBusinessMenuPage() {
                   <div>
                     <p className="text-sm font-black text-[#172033]">Square Account</p>
                     <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      API Key를 입력할 필요가 없습니다. Square 계정으로 로그인해서 연결만 하세요.
+                      Square 로그인으로 연결하거나 API 정보를 직접 입력할 수 있습니다.
                     </p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[11px] font-black ${
@@ -6532,6 +6574,34 @@ export default function OwnerBusinessMenuPage() {
                   }`}>
                     {squareConfigured ? "CONNECTED" : "NOT CONNECTED"}
                   </span>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <button type="button" onClick={() => { setSquareManualOpen((v) => !v); setSquareManualLocationIdInput(squareLocationId); }}
+                    className="text-sm font-black text-emerald-800">
+                    {squareManualOpen ? "API 직접 입력 닫기 ▲" : "Square API 직접 입력 / 수정 ▼"}
+                  </button>
+                  {squareManualOpen ? (
+                    <div className="mt-3 grid gap-3">
+                      <label className="text-xs font-bold text-gray-700">Square Application ID (선택 입력)
+                        <input type="text" autoComplete="off" value={squareManualApplicationIdInput} onChange={(e) => setSquareManualApplicationIdInput(e.target.value)} placeholder="sq0idp-..."
+                          className="mt-1 w-full rounded-lg border p-3 text-sm" />
+                      </label>
+                      <label className="text-xs font-bold text-gray-700">Square Location ID
+                        <input type="text" autoComplete="off" value={squareManualLocationIdInput} onChange={(e) => setSquareManualLocationIdInput(e.target.value)} placeholder="Location ID"
+                          className="mt-1 w-full rounded-lg border p-3 text-sm" />
+                      </label>
+                      <label className="text-xs font-bold text-gray-700">Square Access Token
+                        <input type="password" autoComplete="new-password" value={squareManualAccessTokenInput} onChange={(e) => setSquareManualAccessTokenInput(e.target.value)} placeholder="새 Access Token (기존 토큰은 표시하지 않음)"
+                          className="mt-1 w-full rounded-lg border p-3 text-sm" />
+                      </label>
+                      <p className="text-xs text-gray-600">기존 연결을 수정할 때도 새 Access Token을 입력해야 합니다. 저장 전에 Square에서 유효성을 확인합니다.</p>
+                      <button type="button" onClick={() => void saveSquareManualCredentials()} disabled={savingSquareManual}
+                        className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+                        {savingSquareManual ? "검증 및 저장 중..." : "SQUARE API 연결 저장"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 {squareConfigured ? (

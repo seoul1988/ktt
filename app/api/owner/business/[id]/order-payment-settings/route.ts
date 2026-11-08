@@ -105,7 +105,56 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const { supabase } = await requireBusinessAccess(request, businessId);
     const body = await request.json();
 
-    // Square credentials are never accepted from the browser anymore.
+    // Manual Square connection: validate credentials before changing the stored account.
+    if (body?.paymentProvider === "square" && body?.manualSquareCredentials === true) {
+      const accessToken = String(body?.squareAccessToken || "").trim();
+      const locationId = String(body?.squareLocationId || "").trim();
+      const applicationId = String(body?.squareApplicationId || "").trim();
+      if (!accessToken || !locationId) {
+        return NextResponse.json({ error: "Square Access Token과 Location ID를 입력하세요." }, { status: 400 });
+      }
+      if (accessToken.length > 4096 || locationId.length > 255 || applicationId.length > 255) {
+        return NextResponse.json({ error: "Square 입력값이 너무 깁니다." }, { status: 400 });
+      }
+      const configuredAppId = process.env.SQUARE_APPLICATION_ID || "";
+      if (applicationId && configuredAppId && applicationId !== configuredAppId) {
+        return NextResponse.json({ error: "Application ID가 KTown Square 앱과 일치하지 않습니다." }, { status: 400 });
+      }
+      const squareBase = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase() === "sandbox"
+        ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+      const headers = { Authorization: `Bearer ${accessToken}`, "Square-Version": "2025-10-16", Accept: "application/json" };
+      const [merchantResponse, locationResponse] = await Promise.all([
+        fetch(`${squareBase}/v2/merchants/me`, { headers, cache: "no-store", signal: AbortSignal.timeout(10000) }),
+        fetch(`${squareBase}/v2/locations/${encodeURIComponent(locationId)}`, { headers, cache: "no-store", signal: AbortSignal.timeout(10000) }),
+      ]);
+      if (!merchantResponse.ok || !locationResponse.ok) {
+        return NextResponse.json({ error: "Square 인증 실패: Access Token과 Location ID를 확인하세요. 기존 설정은 유지됩니다." }, { status: 400 });
+      }
+      const merchantData = await merchantResponse.json();
+      const locationData = await locationResponse.json();
+      const merchantId = String(merchantData?.merchant?.id || "").trim();
+      const location = locationData?.location;
+      if (!merchantId || !location?.id || (location.merchant_id && location.merchant_id !== merchantId)) {
+        return NextResponse.json({ error: "Square 가맹점과 매장 정보가 일치하지 않습니다." }, { status: 400 });
+      }
+      const { data, error } = await supabase.from("restaurant_order_private_settings").upsert({
+        business_id: businessId,
+        payment_provider: "square",
+        square_access_token: accessToken,
+        square_refresh_token: null,
+        square_token_expires_at: null,
+        square_merchant_id: merchantId,
+        square_merchant_name: String(merchantData?.merchant?.business_name || ""),
+        square_location_id: locationId,
+        square_location_name: String(location?.name || ""),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "business_id" })
+      .select("payment_provider,stripe_secret_key,stripe_webhook_secret,square_access_token,square_merchant_id,square_merchant_name,square_location_id,square_location_name")
+      .single();
+      if (error) throw error;
+      return NextResponse.json(buildResponse(data));
+    }
+
     if (body?.paymentProvider === "square") {
       const { data, error } = await supabase
         .from("restaurant_order_private_settings")
