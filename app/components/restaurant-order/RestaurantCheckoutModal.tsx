@@ -1311,8 +1311,12 @@ export default function RestaurantCheckoutModal({
                 </section>
 
                 {error ? (
-                  <div className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">
-                    {error}
+                  <div role="alertdialog" aria-label="Payment problem" aria-live="assertive" className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm text-red-900 shadow-md">
+                    <p className="mb-2 text-base font-black">Payment problem / 결제 오류 안내</p>
+                    <p className="font-semibold">{error}</p>
+                    <p className="mt-2 text-sm">{/declin|card.*reject|insufficient.funds/i.test(error) ? "Your card was declined. Please check with your card issuer or try another payment method. / 카드가 거절되었습니다. 카드사에 확인하거나 다른 결제수단을 이용하세요." : /required|please enter|please select|missing|invalid email|invalid phone/i.test(error) ? "Please check the required information and try again. / 필수 입력 정보를 확인해 주세요." : /not ready|could not be loaded|unavailable|network|connect|timeout/i.test(error) ? "The payment service may be temporarily unavailable. Check your connection. / 결제 서비스 연결 상태를 확인해 주세요." : "We could not confirm the exact cause. Please review the message above. / 정확한 원인을 확인할 수 없습니다. 위 오류 내용을 확인해 주세요."}</p>
+                    <p className="mt-2 font-bold text-red-800">If a payment may already have been submitted, check your order status before trying again to avoid a duplicate charge. / 이미 결제를 시도했다면 중복 결제 방지를 위해 주문 상태를 먼저 확인하세요.</p>
+                    <button type="button" onClick={() => setError("")} className="mt-3 rounded-lg border border-red-300 bg-white px-4 py-2 font-bold">Close / 닫기</button>
                   </div>
                 ) : null}
 
