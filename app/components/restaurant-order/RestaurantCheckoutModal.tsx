@@ -261,7 +261,6 @@ export default function RestaurantCheckoutModal({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [smsConsent, setSmsConsent] = useState(false);
-  const [emailConsent, setEmailConsent] = useState(false);
   const [email, setEmail] = useState("");
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
@@ -601,6 +600,19 @@ export default function RestaurantCheckoutModal({
     );
   }
 
+  function logSquareError(stage: string, method: "card" | "google" | "apple" | "unknown", orderId: number, code: string) {
+    try {
+      void fetch("/api/checkout/payment-diagnostics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage, method, businessId, orderId, code }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // Diagnostics must never interfere with checkout.
+    }
+  }
+
   useEffect(() => {
     if (!squarePrepared) return;
 
@@ -647,6 +659,7 @@ export default function RestaurantCheckoutModal({
           }
         } catch (cardError) {
           console.error("Square card init:", cardError);
+          logSquareError("card_init", "card", squarePrepared.orderId, "CARD_INIT_FAILED");
         }
 
         try {
@@ -690,6 +703,7 @@ export default function RestaurantCheckoutModal({
         }
       } catch (e) {
         if (!cancelled) {
+          logSquareError("sdk_init", "unknown", squarePrepared.orderId, "PAYMENT_FORM_FAILED");
           setError(
             e instanceof Error
               ? e.message
@@ -748,6 +762,7 @@ export default function RestaurantCheckoutModal({
     squarePaymentLockRef.current = true;
     setError("");
 
+    let diagnosticStage = "tokenize";
     try {
       const amount = squarePrepared.amount;
       const currencyCode =
@@ -802,6 +817,7 @@ export default function RestaurantCheckoutModal({
       walletPaymentPendingRef.current = false;
       walletLeftPageRef.current = false;
 
+      diagnosticStage = "verify_buyer";
       if (
         method !== "card" &&
         squarePaymentsRef.current?.verifyBuyer
@@ -818,6 +834,7 @@ export default function RestaurantCheckoutModal({
         verificationToken = String(verification?.token || "");
       }
 
+      diagnosticStage = "payment_request";
       const response = await fetch(
         `/api/businesses/${businessId}/orders/${squarePrepared.orderId}/square-pay`,
         {
@@ -864,6 +881,7 @@ export default function RestaurantCheckoutModal({
       alert(`Order #${squarePrepared.orderNumber} paid and received.`);
       onClose();
     } catch (e) {
+      logSquareError(diagnosticStage, method, squarePrepared.orderId, "CHECKOUT_FAILED");
       setError(
         e instanceof Error
           ? e.message
@@ -1036,7 +1054,7 @@ export default function RestaurantCheckoutModal({
     setError("");
     if (!name.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your name."); }
     if (!phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number."); }
-    if (emailConsent && !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim())) {
+    if (!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim())) {
       orderSubmitLockRef.current = false;
       return setError("Please enter a valid email address to receive order updates.");
     }
@@ -1101,8 +1119,8 @@ export default function RestaurantCheckoutModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fulfillmentType,
-          customer: { name: name.trim(), phone: phone.trim(), email: emailConsent ? email.trim() : "" },
-          emailConsent,
+          customer: { name: name.trim(), phone: phone.trim(), email: email.trim() },
+          emailConsent: true,
           deliveryAddress: fulfillmentType === "delivery" ? {
             address1: submitAddress1,
             address2: submitAddress2,
@@ -1467,14 +1485,8 @@ export default function RestaurantCheckoutModal({
                 <input required autoComplete="name" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input required type="tel" autoComplete="tel" aria-label="Phone number (required)" value={phone} onChange={(e) => { setPhone(e.target.value); setSmsConsent(false); }} placeholder="Phone *" inputMode="tel" className="w-full rounded-xl border px-3 py-3 text-sm" />
               </div>
-              <h4 className="mt-5 text-sm font-black">How would you like to receive order updates?</h4>
-              <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
-                <input type="checkbox" checked={emailConsent} onChange={(e) => setEmailConsent(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-gray-950" />
-                <span className="text-xs font-bold">Email updates</span>
-              </label>
-              {emailConsent ? (
-                <input required type="email" autoComplete="email" aria-label="Email address for order updates" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="Email address *" className="mt-3 w-full rounded-xl border px-3 py-3 text-sm" />
-              ) : null}
+              <h4 className="mt-5 text-sm font-black">Email address (required)</h4>
+              <input required type="email" autoComplete="email" aria-label="Email address for order updates (required)" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="Email address *" className="mt-3 w-full rounded-xl border px-3 py-3 text-sm" />
               {settings.smsEnabled === true ? (
                 <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
                   <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-gray-950" />
