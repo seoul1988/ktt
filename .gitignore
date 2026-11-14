@@ -59,3 +59,11 @@ playwright/.auth/
 # Local verification scripts
 /scripts/test-order-domains.cjs
 /scripts/test-restaurant-brands.cjs
+
+# Local backups and temporary tools
+/BAPCARRY_Import_Website_ON.sql
+/chosun22-copy/
+/orders-route-square-backup.txt
+/restore_ktown_square.py
+/sales-page-backup.tsx
+/square-pay-route-backup.txt
